@@ -27,14 +27,6 @@ Overviews menia SEO krajinu v rokoch 2025–2026.
 Ahrefs použil identickú metodológiu ako v pôvodnom výskume z
 marca 2024, aby zabezpečil porovnateľnosť výsledkov:
 
-# AI Overviews znižujú CTR o 58
-
-# %: Aktualizovaná analýza
-
-# dopadov na organickú
-
-# návštevnosť
-
 ## Úvod
 
 ## Metodológia aktualizovanej štúdie
