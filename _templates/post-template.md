@@ -4,6 +4,7 @@ menu_order: 1
 post_status: draft
 post_excerpt: Brief description of this post
 featured_image: _images/example.jpg
+skip_file: yes
 taxonomy:
     category:
         - uncategorized

@@ -1,3 +1,7 @@
+---
+skip_file: yes
+---
+
 # Writing Guide - How to Create Posts
 
 This guide explains how to write and manage content for the WordPress site using this Git repository and the Git it Write plugin.

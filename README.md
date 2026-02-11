@@ -1,3 +1,7 @@
+---
+skip_file: yes
+---
+
 # Teapot.md - WordPress Content via Git it Write
 
 This repository serves as the content source for the [teapot.sk](https://teapot.sk) WordPress site using the [Git it Write](https://github.com/vaakash/git-it-write) plugin.

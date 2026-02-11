@@ -1,3 +1,7 @@
+---
+skip_file: yes
+---
+
 # Claude Instructions - Git it Write Content Repository
 
 This repository is the content source for a WordPress site using the **Git it Write** plugin. Markdown files here are automatically converted to WordPress posts/pages.
