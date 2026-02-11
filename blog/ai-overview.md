@@ -1,7 +1,7 @@
 ---
 title: AI Overviews drasticky znižujú CTR o 58 %: Analýza SEO v roku 2026
 post_status: publish
-post_date: 2026-02-11 08:00:00
+post_date: 2026-02-11 07:00:00
 post_excerpt: Aktualizovaná štúdia od Ahrefs a dáta z decembra 2025 odhaľujú, že AI Overviews spôsobujú 58 % pokles miery prekliknutia na prvej pozícii. Zistite, ako tento trend mení organické vyhľadávanie a čo to znamená pre budúcnosť SEO.
 taxonomy:
     category:
