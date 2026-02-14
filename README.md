@@ -25,6 +25,12 @@ wp_teapot_md/
 │   └── (put images here)
 ├── _templates/                # Templates for new posts (not published)
 │   └── post-template.md
+├── _converter/                # Document conversion & image generation tools
+│   ├── convert.py             # PDF/DOCX/RTF → Markdown converter
+│   ├── generate_images.py     # AI image generation (Nano Banana Pro)
+│   ├── requirements.txt       # Python dependencies
+│   └── lib/                   # Shared library modules
+├── input/                     # Drop documents here for conversion
 ├── .gitignore
 └── (your content folders and .md files go here)
 ```
@@ -59,6 +65,38 @@ wp_teapot_md/
    - **Secret**: same secret key from step 1
    - **Events**: "Just the push event"
 3. Save - now pushes automatically trigger post updates
+
+## Tools
+
+### Document Converter (`_converter/convert.py`)
+
+Converts PDF, DOCX, and RTF files into Markdown with YAML front matter. Optimized for Slovak/Czech content.
+
+```bash
+python _converter/convert.py                          # Convert all files in input/
+python _converter/convert.py input/article.pdf        # Convert specific file
+python _converter/convert.py --output-dir blog/seo/   # Specify output location
+```
+
+### AI Image Generator (`_converter/generate_images.py`)
+
+Generates images for blog posts using Nano Banana Pro (Gemini 3 Pro Image Preview). Claude Code reads the article, crafts context-aware prompts, and invokes this tool.
+
+```bash
+python _converter/generate_images.py blog/my-post.md \
+    -p "Prompt 1" "Prompt 2" "Prompt 3"
+```
+
+Requires `GEMINI_API_KEY` environment variable. Images are saved to `_images/{slug}/` and inserted into the Markdown file.
+
+### Setup
+
+```bash
+cd _converter
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 ## Guides
 
