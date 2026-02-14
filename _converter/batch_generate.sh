@@ -8,7 +8,13 @@ VENV_PYTHON="$SCRIPT_DIR/venv/bin/python"
 GEN_SCRIPT="$SCRIPT_DIR/generate_images.py"
 BLOG_DIR="$SCRIPT_DIR/../blog"
 
-export GEMINI_API_KEY="${GEMINI_API_KEY:?Set GEMINI_API_KEY env var}"
+# Load .env if present
+ENV_FILE="$SCRIPT_DIR/../.env"
+if [ -f "$ENV_FILE" ]; then
+    set -a; source "$ENV_FILE"; set +a
+fi
+
+export GEMINI_API_KEY="${GEMINI_API_KEY:?Set GEMINI_API_KEY env var or create .env file}"
 
 run() {
     local file="$1"

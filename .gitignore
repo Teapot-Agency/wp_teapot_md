@@ -13,6 +13,9 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Environment variables
+.env
+
 # Converter virtual environment & cache
 _converter/venv/
 __pycache__/

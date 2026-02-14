@@ -13,6 +13,9 @@ taxonomy:
 featured_image: _images/pharma01/ai-algoritmy-farmaceuticky-marketing.jpg
 ---
 
+![Modern e-detailing video consultation between pharmaceutical representative and doctor on digital screen, replacing...](/_images/pharma01/e-detailing-video-konzultacia.jpg "Modern e-detailing video consultation between pharmaceutical representative and doctor on digital screen, replacing traditional in-person sales visit")
+
+
 ## Úvod: Viac než len reklama na lieky
 
 Väčšina pacientov vníma farmaceutický marketing len povrchne – cez televízne spoty siahajúce po emóciách alebo letáky v čakárni u lekára. Ako strategický analytik však vidím realitu, ktorá je oveľa komplexnejšia. Moderný **farmaceutický marketing** nie je prostým predajom; je to sofistikovaný priesečník medzi biznisom, špičkovou vedou a verejným zdravím. V súčasnosti prechádzame transformáciou, kde dáta a **umelá inteligencia (AI)** predefinujú spôsob, akým sa liečba dostáva k ľuďom. Tento posun však prináša zásadné otázky o etike a efektivite, ktoré menia základy medicínskej praxe.
@@ -41,6 +44,9 @@ Kľúčovým konceptom, ktorý stratégovia dnes využívajú, je **Promo Synerg
 „Prehodnoťte klinický vývoj inteligentným prepojením údajov, technológií a analýz s cieľom optimalizovať skúšania. Výsledkom je rýchlejšie rozhodovanie a znížené riziko, aby ste mohli rýchlejšie dodávať terapie meniace život.“
 
 Tento prístup od **IQVIA** naznačuje, že inteligencia už nespočíva v množstve dát, ale v schopnosti modelu **Promo Mix Suite** predpovedať scenáre „čo ak“ a optimalizovať rozpočty v reálnom čase.
+
+
+![Dark side of pharmaceutical marketing visualization showing rising prescription costs, patient financial burden, and...](/_images/pharma01/naklady-na-lieky-temna-strana.jpg "Dark side of pharmaceutical marketing visualization showing rising prescription costs, patient financial burden, and telemedicine platform prescription gaps")
 
 ## 4. Temná stránka marketingu: Keď efektivita AI naráža na ekonomickú realitu
 

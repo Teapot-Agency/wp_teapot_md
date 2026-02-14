@@ -333,7 +333,10 @@ def _place_before_sections(body: str, images: list[dict]) -> str:
         return body
 
     lines = body.split('\n')
+    # Try ## headings first, fall back to ### if none found
     heading_indices = [i for i, line in enumerate(lines) if re.match(r'^## ', line)]
+    if not heading_indices:
+        heading_indices = [i for i, line in enumerate(lines) if re.match(r'^### ', line)]
 
     # Build insertion map: line_number -> image dict
     insertions = {}

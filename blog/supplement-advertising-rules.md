@@ -12,7 +12,10 @@ taxonomy:
 featured_image: _images/supplement-advertising-rules/supplement-compliance-ftc-balance.jpg
 ---
 
-### Introduction: The $100 Billion Trust Crisis
+![TikTok Shop supplement commerce ecosystem with creator filming product review, real-time sales dashboard, and affiliate...](/_images/supplement-advertising-rules/tiktok-shop-supplement-commerce.jpg "TikTok Shop supplement commerce ecosystem with creator filming product review, real-time sales dashboard, and affiliate marketing analytics on screen")
+
+
+## Introduction: The $100 Billion Trust Crisis
 
 The supplement market in 2025 is a paradox of historic scale and unprecedented skepticism. While the industry accelerates toward a projected $103.56 billion valuation by 2033—fueled by a robust 7.9% CAGR—it is colliding with a "digitally engineered" consumer. This buyer possesses a high degree of health literacy and utilizes AI-assisted scrutiny to navigate a fragmented marketplace of over 100,000 unique products.
 
@@ -20,7 +23,7 @@ The era of "greenwashed promises" and "pseudo-clinical buzzwords" is over. For b
 
 \--------------------------------------------------------------------------------
 
-### 1. Stop Optimizing for Clicks; Start Optimizing for Answers
+## 1. Stop Optimizing for Clicks; Start Optimizing for Answers
 
 Traditional SEO is dead. We have entered the "zero-click" era of Answer Engine Optimization (AEO). Platforms like Google’s AI Overview, Perplexity, and ChatGPT now satisfy informational queries directly on the search results page. Data shows a staggering **34.5% drop in average organic click-through rates (CTR)** when an AI Overview is present, with some high-traffic keywords plunging by as much as 64%.
 
@@ -28,7 +31,7 @@ However, viewing this as a traffic loss is a tactical error. In 2025, the zero-c
 
 \--------------------------------------------------------------------------------
 
-### 2. TikTok Shop is a Logistics System, Not a Viral Lottery
+## 2. TikTok Shop is a Logistics System, Not a Viral Lottery
 
 Treating TikTok as a "viral lottery" is a firing offense for a growth strategist in 2025. TikTok has shifted from an experimental platform to a retail engine, evidenced by an H1 2025 GMV of **$5.8 billion**, a 200% year-over-year surge. With health and beauty accounting for nearly 80% of total sales, success is an operations game, not a creative stunt.
 
@@ -42,7 +45,7 @@ Strategy favors the micro-affiliate (1k–50k followers) over the mega-celebrity
 
 \--------------------------------------------------------------------------------
 
-### 3. The "Receipts" Era: Traceability as Your Primary Creative Asset
+## 3. The "Receipts" Era: Traceability as Your Primary Creative Asset
 
 Transparency is no longer a footer on your website; it is your most powerful ad copy. In the "Receipts" era, leading brands like Ritual and Seed have proven that showing the literal mapping of the supply chain converts at a higher rate than high-production lifestyle imagery. Radical transparency is a relationship of accountability, not just a label requirement.
 
@@ -56,7 +59,9 @@ Central to this is the "Made Traceable®" framework, which defines the **final p
 
 \--------------------------------------------------------------------------------
 
-### 4. The Micro-Niche Explosion: Postbiotics and GLP-1 Companions
+![Supply chain traceability visualization showing ingredient journey from source farm through lab testing, certificate of analysis, to final supplement bottle](/_images/supplement-advertising-rules/supplement-supply-chain-traceability.jpg "Supply chain traceability visualization showing ingredient journey from source farm through lab testing, certificate of analysis, to final supplement bottle")
+
+## 4. The Micro-Niche Explosion: Postbiotics and GLP-1 Companions
 
 Generic multivitamins are being cannibalized by "targeted interventions." Two dominant micro-niches have emerged for 2025:
 
@@ -76,7 +81,7 @@ Growth in these niches is driven by "cellular resilience" narratives rather than
 
 \--------------------------------------------------------------------------------
 
-### 5. The "Humble" Single Image: Why Simple Beats Over-Produced
+## 5. The "Humble" Single Image: Why Simple Beats Over-Produced
 
 A definitive analysis of **500 Meta ads** reveals that "humble" single-image ads consistently outperform high-production video and polished UGC. Single-image "winner shots" have an average lifecycle of **268 days**, significantly outlasting complex video assets that fatigue within weeks.
 
@@ -86,7 +91,7 @@ The strategic trade-off is clear: while we simplify the creative for Meta, we in
 
 \--------------------------------------------------------------------------------
 
-### 6. Regulatory Guardrails: The FTC's Non-Negotiables
+## 6. Regulatory Guardrails: The FTC's Non-Negotiables
 
 Compliance is the bedrock of longevity. In 2025, the FTC has moved beyond literal truth to the principle of **"Net Impression."** This means marketers are responsible for the total takeaway of an ad—text, imagery, and product name combined.
 
@@ -102,7 +107,7 @@ The consequences of a false claim are no longer just legal—they represent a to
 
 \--------------------------------------------------------------------------------
 
-### Conclusion: The Future-Proof Framework
+## Conclusion: The Future-Proof Framework
 
 As we look toward 2026, the industry will continue to favor brands that treat data as a creative asset and science as a baseline requirement. The "personal longevity equation" has moved from guesswork to precise biological evidence.
 

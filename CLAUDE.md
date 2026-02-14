@@ -95,7 +95,7 @@ Content goes **after** the closing `---` of front matter.
 
 Use standard markdown:
 
-- `## Heading 2`, `### Heading 3` etc. (don't use `# H1` - the title serves as H1)
+- `## Heading 2`, `### Heading 3` etc. (**NEVER use `#` H1** — the `title` field is H1; main sections MUST be `##` H2)
 - `**bold**`, `*italic*`
 - `[link text](url)` for links
 - `![alt](/_images/file.jpg "caption")` for images
@@ -123,9 +123,9 @@ Use **relative links** to other `.md` files - the plugin converts them to proper
 1. **Determine location**: Where in the folder hierarchy does this post belong?
 2. **Create the file**: `folder/post-slug.md` (or `folder/index.md` for folder page)
 3. **Add front matter**: Always include at minimum `title` and `post_status`
-4. **Write content**: Standard markdown after the front matter
+4. **Write content**: Standard markdown after the front matter — main sections as `##` (H2)
 5. **Add images**: Place images in `_images/`, reference with `/_images/filename.jpg`
-6. **Verify**: Check that front matter YAML is valid (proper indentation, no tabs)
+6. **Run pre-push checks**: Validate before committing (see Pre-Push Validation below)
 
 ## Step-by-Step: Creating a New Section (Folder with Posts)
 
@@ -139,18 +139,66 @@ Use **relative links** to other `.md` files - the plugin converts them to proper
 - **No front matter** - every file needs `---` delimited YAML at the top
 - **Using tabs in YAML** - use spaces only for indentation
 - **Spaces in filenames** - use hyphens: `my-post.md` not `my post.md`
-- **Using H1 (`#`)** - the `title` field is the H1, start content with H2 (`##`)
+- **Wrong heading hierarchy** — the `title` field is H1; main article sections MUST use `##` (H2), sub-sections use `###` (H3). Never use `#` (H1) in content, and never skip levels (e.g., going straight to `###` without `##` above it)
 - **External featured images** - `featured_image` must point to a file in `_images/`
 - **Forgetting `post_status`** - without it the post may not be visible
 - **Renaming files** - this creates a NEW post (old one remains, must be deleted manually in WP)
 - **Deleting files** - the WordPress post is NOT deleted automatically; manual cleanup needed
+
+## Pre-Push Validation Checklist
+
+**ALWAYS run these checks before committing/pushing any `.md` content changes.** Fix all issues before pushing.
+
+### Automated checks (run from repo root)
+
+```bash
+# 1. Heading hierarchy: No H1 in content, main sections must be H2
+for f in blog/*.md; do
+    slug=$(basename "$f" .md); [ "$slug" = "index" ] && continue
+    h1=$(grep -c '^# [^#]' "$f")
+    h2=$(grep -c '^## [^#]' "$f")
+    if [ "$h1" -gt 0 ]; then echo "ERROR: $slug has $h1 H1 heading(s) — use ## instead"; fi
+    if [ "$h2" -eq 0 ]; then echo "WARNING: $slug has no H2 headings — main sections should use ##"; fi
+done
+
+# 2. Front matter: Every published .md must have title and post_status
+for f in blog/*.md; do
+    slug=$(basename "$f" .md)
+    grep -q '^skip_file: yes' "$f" && continue
+    grep -q '^title:' "$f" || echo "ERROR: $slug missing 'title' in front matter"
+    grep -q '^post_status:' "$f" || echo "ERROR: $slug missing 'post_status' in front matter"
+done
+
+# 3. Featured image exists on disk
+for f in blog/*.md; do
+    slug=$(basename "$f" .md); [ "$slug" = "index" ] && continue
+    img=$(grep '^featured_image:' "$f" | sed 's/featured_image: *//')
+    if [ -n "$img" ] && [ ! -f "$img" ]; then echo "ERROR: $slug featured_image '$img' not found"; fi
+done
+
+# 4. No non-image files in _images/
+find _images -type f ! -name '*.jpg' ! -name '*.jpeg' ! -name '*.png' ! -name '*.gif' ! -name '*.webp' | while read f; do
+    echo "ERROR: Non-image file in _images/: $f (will break Git it Write sync)"
+done
+```
+
+### Manual review checklist
+
+- [ ] Heading hierarchy: `title` = H1, content starts with `##` (H2), sub-sections `###` (H3) — no skipped levels
+- [ ] Front matter has at least `title` and `post_status`
+- [ ] `featured_image` path matches an actual file in `_images/`
+- [ ] Body image references (`![alt](path "title")`) have descriptive alt text and valid paths
+- [ ] No `#` (H1) headings in content body
+- [ ] No non-image files (`.gitkeep`, `.DS_Store`, etc.) in `_images/`
+- [ ] Filename is lowercase, hyphens only, no spaces
+- [ ] YAML uses spaces (no tabs)
 
 ## Generating Images with Gemini (Nano Banana Pro)
 
 The `_converter/` directory contains tools for AI image generation using Google's Gemini 3 Pro Image model.
 
 ### Setup
-- **API key**: Set `GEMINI_API_KEY` environment variable (or pass `--api-key`)
+- **API key**: Set `GEMINI_API_KEY` in `.env` file at repo root (gitignored), or export as environment variable, or pass `--api-key`
 - **Python venv**: `_converter/venv/` has all dependencies pre-installed (`google-genai`, `Pillow`)
 - **Model**: `gemini-3-pro-image-preview` (Nano Banana Pro)
 
@@ -178,10 +226,14 @@ GEMINI_API_KEY="your-key" _converter/venv/bin/python _converter/generate_images.
 ### Batch Image Generation
 
 ```bash
-GEMINI_API_KEY="your-key" _converter/batch_generate.sh
+# Generate featured images (1 per article)
+_converter/batch_generate.sh
+
+# Generate body images (2 per article, 4 parallel workers)
+_converter/batch_body_images.sh
 ```
 
-Generates one featured image per blog article. Edit `batch_generate.sh` to update prompts and filenames.
+Both scripts auto-load `.env` from repo root. Edit the scripts to update prompts and filenames.
 
 ### Image SEO Process
 
@@ -208,7 +260,8 @@ When generating images for articles, **always follow this process**:
 - `_converter/lib/gemini.py` — Gemini API client with retry logic
 - `_converter/lib/images.py` — image processing (resize, format conversion)
 - `_converter/generate_images.py` — CLI tool for per-article image generation (supports `-n` for SEO filenames)
-- `_converter/batch_generate.sh` — batch runner for all blog articles
+- `_converter/batch_generate.sh` — batch runner for featured images (sequential)
+- `_converter/batch_body_images.sh` — batch runner for body images (parallel, 4 workers)
 
 ## Template
 
