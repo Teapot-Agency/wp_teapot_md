@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - pharma-marketing
         - hcp-engagement
+featured_image: _images/voucher-revolution-pharma-marketing/eu-pharma-exclusivity-voucher.jpg
 ---
 
 ### 1. Introduction: The Engagement Paradox

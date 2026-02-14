@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - self-care
         - otc-market
+featured_image: _images/self-care-revolution/smart-self-care-medicine-cabinet.jpg
 ---
 
 For decades, the pharmacy counter has functioned as a rigid socioeconomic wall. On one side sits the convenience of over-the-counter (OTC) remedies for minor ailments; on the other, a vast catalog of "serious" medicine locked behind the mandatory—and often expensive—gatekeeper of a physician’s prescription pad. But as primary care costs soar and patients grow weary of the weeks-long wait for a simple appointment, that wall is not just cracking—it is being systematically dismantled.

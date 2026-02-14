@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - pharma-marketing
         - loss-of-exclusivity
+featured_image: _images/pharma-marketing-lifecycle/pharmaceutical-lifecycle-diagram.jpg
 ---
 
 ### 1. Introduction: The Billion-Dollar Countdown

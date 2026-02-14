@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - pharma-strategy
         - digital-transformation
+featured_image: _images/new-pharma-playbook/pharma-strategy-digital-playbook.jpg
 ---
 
 ### The Hook: Why the Old Playbook Just Expired

@@ -62,10 +62,16 @@ def main():
         print("=== DRY RUN ===")
         print(f"Would generate {len(prompts)} image(s) for '{slug}'")
         print(f"Style prefix: {style[:60]}..." if style else "Style prefix: (none)")
-        print(f"Save to: _images/{slug}/gen-001.jpg ... gen-{len(prompts):03d}.jpg")
+        for i, p in enumerate(prompts):
+            if args.image_names and i < len(args.image_names):
+                name = args.image_names[i]
+            else:
+                name = _prompt_to_filename(p, i)
+            print(f"  {i + 1}. _images/{slug}/{name}.jpg")
         print(f"Placement: {args.placement}")
         if args.featured:
-            print(f"Featured image: _images/{slug}/gen-001.jpg")
+            first_name = args.image_names[0] if args.image_names else _prompt_to_filename(prompts[0], 0)
+            print(f"Featured image: _images/{slug}/{first_name}.jpg")
         sys.exit(0)
 
     # 3. Generate images via Gemini API
@@ -89,7 +95,7 @@ def main():
     print(f"\n{len(results)}/{len(prompts)} image(s) generated successfully.")
 
     # 4. Save images to _images/{slug}/
-    images = save_generated_images(results, slug)
+    images = save_generated_images(results, slug, image_names=args.image_names)
 
     # 5. Insert image references into markdown
     if args.placement != 'manual':
@@ -167,6 +173,10 @@ Examples:
         help='Overwrite existing featured_image',
     )
     parser.add_argument(
+        '--image-names', '-n', nargs='+',
+        help='Custom SEO-friendly filenames (without extension), one per prompt',
+    )
+    parser.add_argument(
         '--api-key',
         help='Gemini API key (overrides GEMINI_API_KEY env var)',
     )
@@ -220,9 +230,11 @@ def resolve_style(args: argparse.Namespace) -> str:
 def save_generated_images(
     results: list[tuple],
     slug: str,
+    image_names: list[str] | None = None,
 ) -> list[dict]:
     """Save generated PIL images to _images/{slug}/ with processing.
 
+    Filename priority: explicit image_names → auto-generated from prompt → gen-NNN fallback.
     Returns list of dicts with keys: path, alt, title.
     """
     from lib.images import _process_image
@@ -239,7 +251,11 @@ def save_generated_images(
 
         processed_img, ext = _process_image(raw_bytes)
 
-        filename = f'gen-{i + 1:03d}.{ext}'
+        # Filename priority: explicit name → auto from prompt → gen-NNN
+        if image_names and i < len(image_names):
+            filename = f'{image_names[i]}.{ext}'
+        else:
+            filename = f'{_prompt_to_filename(prompt, i)}.{ext}'
         filepath = os.path.join(output_dir, filename)
         processed_img.save(filepath, quality=85 if ext == 'jpg' else None)
 
@@ -250,6 +266,23 @@ def save_generated_images(
         print(f"  Saved: {md_path}")
 
     return images
+
+
+def _prompt_to_filename(prompt: str, index: int, max_length: int = 60) -> str:
+    """Convert a generation prompt into an SEO-friendly filename slug.
+
+    Examples:
+        "Modern pharmacy with digital analytics" → "modern-pharmacy-with-digital-analytics"
+        "Doctor reviewing patient data on tablet" → "doctor-reviewing-patient-data-on-tablet"
+    """
+    slug = prompt.lower().strip()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = slug.strip('-')
+    if len(slug) > max_length:
+        slug = slug[:max_length].rsplit('-', 1)[0]
+    if not slug:
+        slug = f'gen-{index + 1:03d}'
+    return slug
 
 
 def _prompt_to_alt(prompt: str) -> str:

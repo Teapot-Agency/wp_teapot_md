@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - otc-marketing
         - supplement-market
+featured_image: _images/end-of-tv-pill-ad/tv-pill-ad-to-digital-health.jpg
 ---
 
 ### 1. Introduction: The Death of the Passive Patient

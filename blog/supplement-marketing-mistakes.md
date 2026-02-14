@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - supplement-marketing
         - marketing-mistakes
+featured_image: _images/supplement-marketing-mistakes/supplement-marketing-regulatory-risk.jpg
 ---
 
 ### 1. Introduction: The High-Quality Ingredient Paradox

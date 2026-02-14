@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - future-pharma
         - healthcare-innovation
+featured_image: _images/future-of-pharma-2030/pharma-2030-dna-data-innovation.jpg
 ---
 
 The pharmaceutical industry is approaching its most violent inflection point yet. We are currently wading through a crisis of "messy" digital interactions where fragmented communications obscure the path to care. This inefficiency carries a staggering price: the cost of sickness in the U.S. alone has surged past $5 trillion, growing at an unsustainable 8% annually. Society can no longer afford to treat illness late or manage symptoms while ignoring the underlying drivers of cost.

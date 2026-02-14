@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - otc-switch
         - prescription-trends
+featured_image: _images/death-of-prescription/prescription-to-otc-medicine-cabinet.jpg
 ---
 
 ### 1. Introduction: The Decentralization of Primary Care

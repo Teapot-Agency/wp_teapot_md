@@ -145,6 +145,71 @@ Use **relative links** to other `.md` files - the plugin converts them to proper
 - **Renaming files** - this creates a NEW post (old one remains, must be deleted manually in WP)
 - **Deleting files** - the WordPress post is NOT deleted automatically; manual cleanup needed
 
+## Generating Images with Gemini (Nano Banana Pro)
+
+The `_converter/` directory contains tools for AI image generation using Google's Gemini 3 Pro Image model.
+
+### Setup
+- **API key**: Set `GEMINI_API_KEY` environment variable (or pass `--api-key`)
+- **Python venv**: `_converter/venv/` has all dependencies pre-installed (`google-genai`, `Pillow`)
+- **Model**: `gemini-3-pro-image-preview` (Nano Banana Pro)
+
+### Single Article Image Generation
+
+```bash
+GEMINI_API_KEY="your-key" _converter/venv/bin/python _converter/generate_images.py \
+    blog/my-post.md \
+    -p "Descriptive prompt for the image" \
+    -n "seo-friendly-filename" \
+    --featured
+```
+
+**Key options:**
+- `-p "prompt1" "prompt2"` — one or more image prompts (required)
+- `-n "name1" "name2"` — SEO-friendly filenames without extension (one per prompt). If omitted, auto-generates from prompt text
+- `--placement before-sections` — insert images before evenly-distributed headings (default)
+- `--placement manual` — save images only, don't modify the .md file
+- `--featured` — set first image as `featured_image` in front matter (default)
+- `--no-featured` — skip featured_image update
+- `--dry-run` — preview without API calls or file changes
+- `--aspect-ratio 16:9` — image aspect ratio (default: 16:9)
+- `--resolution 1K` — image resolution: 1K, 2K, or 4K (default: 1K)
+
+### Batch Image Generation
+
+```bash
+GEMINI_API_KEY="your-key" _converter/batch_generate.sh
+```
+
+Generates one featured image per blog article. Edit `batch_generate.sh` to update prompts and filenames.
+
+### Image SEO Process
+
+When generating images for articles, **always follow this process**:
+
+1. **Choose a descriptive filename** (`-n`) — WordPress uses the filename as the default image title/slug in the media library. Use lowercase, hyphens, 3-5 keywords describing the image content
+   - Good: `pharma-ai-analytics-dashboard`, `supplement-compliance-ftc-balance`
+   - Bad: `gen-001`, `image1`, `hero`
+2. **Write a detailed visual prompt** (`-p`) — the prompt is automatically converted to:
+   - **Alt text** (max 125 chars) — used for accessibility and SEO `alt` attribute
+   - **Title/caption** (max 200 chars) — used for image `title` hover text
+3. **Use `--dry-run`** first to preview filenames before generating
+4. Images are saved to `_images/{slug}/{seo-name}.jpg` (processed, max 1600px width, quality 85)
+
+**Filename priority:** explicit `-n` name > auto-generated from prompt > `gen-NNN` fallback
+
+### Image Prompt Guidelines
+- Write descriptive, visual prompts — the script prepends a default style prefix about healthcare/pharma editorial aesthetics
+- Use `--no-style` to disable the default prefix
+- Use `--style "Custom prefix"` for a different style
+- Keep prompts focused on visual elements: composition, colors, subjects, mood
+
+### Architecture
+- `_converter/lib/gemini.py` — Gemini API client with retry logic
+- `_converter/lib/images.py` — image processing (resize, format conversion)
+- `_converter/generate_images.py` — CLI tool for per-article image generation (supports `-n` for SEO filenames)
+- `_converter/batch_generate.sh` — batch runner for all blog articles
+
 ## Template
 
 Use `_templates/post-template.md` as a starting point for new posts. Copy it to the desired location and rename.

@@ -9,6 +9,7 @@ taxonomy:
     post_tag:
         - supplement-advertising
         - brand-trust
+featured_image: _images/supplement-advertising-rules/supplement-compliance-ftc-balance.jpg
 ---
 
 ### Introduction: The $100 Billion Trust Crisis

@@ -10,6 +10,7 @@ taxonomy:
         - farmaceuticky-marketing
         - ai-v-zdravotnictve
         - digital-health
+featured_image: _images/pharma01/ai-algoritmy-farmaceuticky-marketing.jpg
 ---
 
 ## Úvod: Viac než len reklama na lieky
