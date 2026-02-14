@@ -89,25 +89,25 @@ def main():
     print(f"\n{len(results)}/{len(prompts)} image(s) generated successfully.")
 
     # 4. Save images to _images/{slug}/
-    image_paths = save_generated_images(results, slug)
+    images = save_generated_images(results, slug)
 
     # 5. Insert image references into markdown
     if args.placement != 'manual':
-        body = insert_images(body, image_paths, args.placement)
-        print(f"Inserted {len(image_paths)} image reference(s) ({args.placement}).")
+        body = insert_images(body, images, args.placement)
+        print(f"Inserted {len(images)} image reference(s) ({args.placement}).")
 
     # 6. Update featured_image in front matter
-    if args.featured and image_paths:
-        frontmatter = update_featured_image(frontmatter, image_paths[0])
+    if args.featured and images:
+        frontmatter = update_featured_image(frontmatter, images[0]['path'])
 
     # 7. Write updated .md file
-    if args.placement != 'manual' or (args.featured and image_paths):
+    if args.placement != 'manual' or (args.featured and images):
         write_file(filepath, frontmatter + '\n' + body)
         print(f"Updated: {args.file}")
     else:
-        print("\nImage paths for manual insertion:")
-        for path in image_paths:
-            print(f"  ![image]({path})")
+        print("\nImage references for manual insertion:")
+        for img in images:
+            print(f"  {_image_markdown(img)}")
 
     print("\nDone.")
 
@@ -220,17 +220,17 @@ def resolve_style(args: argparse.Namespace) -> str:
 def save_generated_images(
     results: list[tuple],
     slug: str,
-) -> list[str]:
+) -> list[dict]:
     """Save generated PIL images to _images/{slug}/ with processing.
 
-    Returns list of markdown-ready paths like '/_images/slug/gen-001.jpg'.
+    Returns list of dicts with keys: path, alt, title.
     """
     from lib.images import _process_image
 
     output_dir = os.path.join(IMAGES_DIR, slug)
     os.makedirs(output_dir, exist_ok=True)
 
-    paths = []
+    images = []
     for i, (img, prompt) in enumerate(results):
         # Convert PIL Image to bytes for _process_image()
         buf = BytesIO()
@@ -244,66 +244,96 @@ def save_generated_images(
         processed_img.save(filepath, quality=85 if ext == 'jpg' else None)
 
         md_path = f'/_images/{slug}/{filename}'
-        paths.append(md_path)
+        alt = _prompt_to_alt(prompt)
+        title = _prompt_to_title(prompt)
+        images.append({'path': md_path, 'alt': alt, 'title': title})
         print(f"  Saved: {md_path}")
 
-    return paths
+    return images
 
 
-def insert_images(body: str, image_paths: list[str], placement: str) -> str:
+def _prompt_to_alt(prompt: str) -> str:
+    """Convert a generation prompt into concise SEO alt text (max 125 chars)."""
+    # Strip trailing periods, capitalize first letter
+    alt = prompt.strip().rstrip('.')
+    if alt and alt[0].islower():
+        alt = alt[0].upper() + alt[1:]
+    if len(alt) > 125:
+        alt = alt[:122].rsplit(' ', 1)[0] + '...'
+    return alt
+
+
+def _prompt_to_title(prompt: str) -> str:
+    """Convert a generation prompt into an image title/caption (max 200 chars)."""
+    title = prompt.strip().rstrip('.')
+    if title and title[0].islower():
+        title = title[0].upper() + title[1:]
+    if len(title) > 200:
+        title = title[:197].rsplit(' ', 1)[0] + '...'
+    return title
+
+
+def _image_markdown(img: dict) -> str:
+    """Build markdown image tag with alt text and title for SEO.
+
+    Output: ![Alt text](path "Title caption")
+    """
+    return f'![{img["alt"]}]({img["path"]} "{img["title"]}")'
+
+
+def insert_images(body: str, images: list[dict], placement: str) -> str:
     """Insert image markdown references into the article body."""
     if placement == 'before-sections':
-        return _place_before_sections(body, image_paths)
+        return _place_before_sections(body, images)
     elif placement == 'after-intro':
-        return _place_after_intro(body, image_paths)
+        return _place_after_intro(body, images)
     return body
 
 
-def _place_before_sections(body: str, image_paths: list[str]) -> str:
+def _place_before_sections(body: str, images: list[dict]) -> str:
     """Insert images before evenly-distributed ## headings.
 
     Image 1: hero position (top of body, before first content).
     Remaining images: distributed before evenly-spaced ## headings.
     """
-    if not image_paths:
+    if not images:
         return body
 
     lines = body.split('\n')
     heading_indices = [i for i, line in enumerate(lines) if re.match(r'^## ', line)]
 
-    # Build insertion map: line_number -> image markdown
+    # Build insertion map: line_number -> image dict
     insertions = {}
 
     # First image: hero position at top of body
-    insertions[0] = image_paths[0]
+    insertions[0] = images[0]
 
     # Distribute remaining images across headings
-    remaining = image_paths[1:]
+    remaining = images[1:]
     if remaining and heading_indices:
         # Skip first heading (hero image is already before it)
         available_headings = heading_indices[1:] if len(heading_indices) > 1 else heading_indices
         step = max(1, len(available_headings) // (len(remaining) + 1))
-        for j, img_path in enumerate(remaining):
+        for j, img in enumerate(remaining):
             idx = min((j + 1) * step, len(available_headings) - 1)
             line_num = available_headings[idx]
-            insertions[line_num] = img_path
+            insertions[line_num] = img
 
     # Insert in reverse order to preserve line numbers
     for line_num in sorted(insertions.keys(), reverse=True):
-        img_path = insertions[line_num]
-        img_line = f'\n![image]({img_path})\n'
+        img_line = f'\n{_image_markdown(insertions[line_num])}\n'
         lines.insert(line_num, img_line)
 
     return '\n'.join(lines)
 
 
-def _place_after_intro(body: str, image_paths: list[str]) -> str:
+def _place_after_intro(body: str, images: list[dict]) -> str:
     """Insert all images between intro text and first ## heading."""
-    if not image_paths:
+    if not images:
         return body
 
     match = re.search(r'^## ', body, re.MULTILINE)
-    img_block = '\n\n'.join(f'![image]({p})' for p in image_paths)
+    img_block = '\n\n'.join(_image_markdown(img) for img in images)
 
     if not match:
         return body + '\n\n' + img_block
