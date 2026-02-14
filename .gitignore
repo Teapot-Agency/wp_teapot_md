@@ -12,3 +12,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+
+# Converter virtual environment
+_converter/venv/
