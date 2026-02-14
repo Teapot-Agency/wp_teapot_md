@@ -1,5 +1,5 @@
 ---
-title: "The Commerce Engine: Why 2026 Marks the End of "Vibe-Based" Supplement Marketing"
+title: 'The Commerce Engine: Why 2026 Marks the End of "Vibe-Based" Supplement Marketing'
 post_status: publish
 post_date: 2025-07-08 09:00:00
 post_excerpt: "Vibe-based supplement marketing is dead. Learn how top wellness brands are building performance-driven commerce engines with AI, clinical proof, and owned communities."
