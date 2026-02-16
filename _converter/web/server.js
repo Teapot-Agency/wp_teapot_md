@@ -6,6 +6,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
+import {
+  createClient as createDeepLClient,
+  translateTexts,
+  getUsage as getDeepLUsage,
+  getDefaultTargets,
+  LANG_NAMES,
+  DEEPL_TO_DIR,
+  DISPLAY_TO_DEEPL,
+} from './src/lib/deepl.js';
+import {
+  extractTranslatableSegments,
+  reassembleTranslation,
+  countTranslatableChars,
+  humanizeSlug,
+} from './src/lib/translation.js';
+import { generateSlug } from './src/lib/slug.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +40,11 @@ const ai = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
   : null;
 
+// Initialize DeepL client (null if no API key — translation endpoints return 503)
+const deeplClient = process.env.DEEPL_API_KEY
+  ? createDeepLClient(process.env.DEEPL_API_KEY)
+  : null;
+
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
@@ -37,9 +58,11 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const MAX_IMAGE_WIDTH = 1600;
 const DEFAULT_STYLE_PREFIX =
-  'Professional editorial illustration for a healthcare and pharmaceutical ' +
-  'marketing blog. Clean, modern aesthetic with subtle corporate colors. ' +
-  'High quality, suitable as a blog header or section image. ';
+  'Photorealistic, real-world photography style. Professional editorial photo ' +
+  'for a healthcare and pharmaceutical marketing blog. Looks like a real ' +
+  'photograph taken with a high-end camera. Natural lighting, realistic ' +
+  'textures and materials. DO NOT include any text, words, letters, numbers, ' +
+  'typography, watermarks, or logos in the image. ';
 
 // ---------------------------------------------------------------------------
 // Helper functions (ported from Python generate_images.py)
@@ -313,8 +336,10 @@ Analyze the following article and generate:
    - seoFilename: SEO-friendly filename
    - afterSection: the heading text this image should appear after
 
-Image prompts should describe visual elements (composition, subjects, colors, mood, style).
-Do NOT mention text or typography in prompts.
+Image prompts MUST describe photorealistic, real-world photography scenes (like stock photos taken with a real camera).
+Do NOT describe illustrations, cartoons, or animated styles.
+Do NOT mention any text, words, letters, typography, or logos in prompts.
+Focus on: real people, real objects, real environments, natural lighting, realistic textures.
 
 Respond in the same language as the article for metaTitle, metaDescription, and slug.
 
@@ -379,6 +404,283 @@ app.get('/api/images/:slug/:filename', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Translation endpoints (DeepL)
+// ---------------------------------------------------------------------------
+
+const TRANSLATION_LANGS = ['en', 'cs', 'sk'];
+
+// GET /api/translation-status/:slug — check which translations exist
+app.get('/api/translation-status/:slug', (req, res) => {
+  try {
+    const { slug } = req.params;
+    const sourceFile = path.join(blogDir, `${slug}.md`);
+
+    if (!fs.existsSync(sourceFile)) {
+      return res.status(404).json({ error: `Source article ${slug}.md not found` });
+    }
+
+    const sourceContent = fs.readFileSync(sourceFile, 'utf-8');
+    const segments = extractTranslatableSegments(sourceContent);
+
+    // Simple source language heuristic based on characters
+    let sourceLang = 'EN';
+    if (segments) {
+      const text = segments.title + ' ' + (segments.excerpt || '');
+      if (/[ôĺŕľ]/i.test(text)) sourceLang = 'SK';
+      else if (/[ěřů]/i.test(text)) sourceLang = 'CS';
+      else if (/[áčďéíňóšťúýž]/i.test(text)) sourceLang = 'SK'; // Slovak more likely for this project
+    }
+
+    const translations = {};
+    for (const lang of TRANSLATION_LANGS) {
+      const langFile = path.join(blogDir, lang, `${slug}.md`);
+      if (fs.existsSync(langFile)) {
+        const stat = fs.statSync(langFile);
+        translations[lang] = { exists: true, modified: stat.mtime.toISOString() };
+      } else {
+        translations[lang] = { exists: false };
+      }
+    }
+
+    res.json({
+      slug,
+      sourceLang,
+      defaultTargets: getDefaultTargets(sourceLang).map((l) => DEEPL_TO_DIR[l] || l.toLowerCase()),
+      translations,
+      charsEstimate: segments ? countTranslatableChars(segments) : 0,
+    });
+  } catch (err) {
+    console.error('Error checking translation status:', err.message);
+    res.status(500).json({ error: 'Failed to check translation status' });
+  }
+});
+
+// POST /api/estimate-translation — estimate character cost
+app.post('/api/estimate-translation', async (req, res) => {
+  try {
+    const { slug, targetLangs } = req.body;
+
+    if (!slug) return res.status(400).json({ error: 'slug is required' });
+    if (!deeplClient) return res.status(503).json({ error: 'DEEPL_API_KEY is not configured' });
+
+    const sourceFile = path.join(blogDir, `${slug}.md`);
+    if (!fs.existsSync(sourceFile)) {
+      return res.status(404).json({ error: `Source article ${slug}.md not found` });
+    }
+
+    const content = fs.readFileSync(sourceFile, 'utf-8');
+    const segments = extractTranslatableSegments(content);
+    if (!segments) return res.status(400).json({ error: 'Failed to parse article front matter' });
+
+    const charsPerLang = countTranslatableChars(segments);
+    const numLangs = (targetLangs || []).length || 2;
+    const totalEstimate = charsPerLang * numLangs;
+
+    const usage = await getDeepLUsage(deeplClient);
+
+    res.json({
+      slug,
+      charsPerLang,
+      numLangs,
+      totalEstimate,
+      quota: {
+        used: usage.count,
+        limit: usage.limit,
+        remaining: usage.limit - usage.count,
+        sufficient: (usage.limit - usage.count) >= totalEstimate,
+        percent: usage.percent,
+      },
+    });
+  } catch (err) {
+    console.error('Error estimating translation:', err.message);
+    res.status(500).json({ error: `Estimation failed: ${err.message}` });
+  }
+});
+
+// POST /api/translate-article — translate an article to one or more languages
+app.post('/api/translate-article', async (req, res) => {
+  try {
+    const { slug, targetLangs, sourceLang, formality } = req.body;
+
+    if (!slug) return res.status(400).json({ error: 'slug is required' });
+    if (!targetLangs || !targetLangs.length) return res.status(400).json({ error: 'targetLangs is required' });
+    if (!deeplClient) return res.status(503).json({ error: 'DEEPL_API_KEY is not configured' });
+
+    const sourceFile = path.join(blogDir, `${slug}.md`);
+    if (!fs.existsSync(sourceFile)) {
+      return res.status(404).json({ error: `Source article ${slug}.md not found` });
+    }
+
+    const content = fs.readFileSync(sourceFile, 'utf-8');
+    const segments = extractTranslatableSegments(content);
+    if (!segments) return res.status(400).json({ error: 'Failed to parse article front matter' });
+
+    const results = [];
+    let totalBilledChars = 0;
+
+    for (const targetLang of targetLangs) {
+      // Convert short codes to DeepL codes
+      const deeplTarget = DISPLAY_TO_DEEPL[targetLang.toLowerCase()] || targetLang.toUpperCase();
+      const dirCode = DEEPL_TO_DIR[deeplTarget] || targetLang.toLowerCase();
+
+      // Build batch of all translatable texts
+      const batch = [];
+      const indices = { title: -1, excerpt: -1, bodyStart: -1, bodyEnd: -1, catsStart: -1, catsEnd: -1, tagsStart: -1, tagsEnd: -1, altsStart: -1, altsEnd: -1, titlesStart: -1, titlesEnd: -1 };
+
+      // Title
+      if (segments.title) {
+        indices.title = batch.length;
+        batch.push(segments.title);
+      }
+
+      // Excerpt
+      if (segments.excerpt) {
+        indices.excerpt = batch.length;
+        batch.push(segments.excerpt);
+      }
+
+      // Body
+      if (segments.body) {
+        indices.bodyStart = batch.length;
+        batch.push(segments.body);
+        indices.bodyEnd = batch.length;
+      }
+
+      // Taxonomy terms (humanized)
+      if (segments.categories.length) {
+        indices.catsStart = batch.length;
+        for (const cat of segments.categories) batch.push(humanizeSlug(cat));
+        indices.catsEnd = batch.length;
+      }
+
+      if (segments.tags.length) {
+        indices.tagsStart = batch.length;
+        for (const tag of segments.tags) batch.push(humanizeSlug(tag));
+        indices.tagsEnd = batch.length;
+      }
+
+      // Image alt texts
+      if (segments.imageAlts.length) {
+        indices.altsStart = batch.length;
+        for (const alt of segments.imageAlts) batch.push(alt);
+        indices.altsEnd = batch.length;
+      }
+
+      // Image titles
+      if (segments.imageTitles.length) {
+        indices.titlesStart = batch.length;
+        for (const title of segments.imageTitles) batch.push(title);
+        indices.titlesEnd = batch.length;
+      }
+
+      if (batch.length === 0) {
+        results.push({ lang: dirCode, deeplLang: deeplTarget, content: '', billedChars: 0, error: 'No translatable content' });
+        continue;
+      }
+
+      // Translate the batch
+      const deeplSource = sourceLang ? (DISPLAY_TO_DEEPL[sourceLang.toLowerCase()] || sourceLang.toUpperCase()) : null;
+      const translated = await translateTexts(deeplClient, batch, deeplTarget, deeplSource, { formality });
+
+      totalBilledChars += translated.billedChars;
+
+      // Extract results back into structure
+      const translatedTitle = indices.title >= 0 ? translated.texts[indices.title] : segments.title;
+      const translatedExcerpt = indices.excerpt >= 0 ? translated.texts[indices.excerpt] : '';
+      const translatedBody = indices.bodyStart >= 0 ? translated.texts[indices.bodyStart] : segments.body;
+
+      const translatedCats = indices.catsStart >= 0
+        ? translated.texts.slice(indices.catsStart, indices.catsEnd).map((t) => generateSlug(t))
+        : segments.categories;
+
+      const translatedTags = indices.tagsStart >= 0
+        ? translated.texts.slice(indices.tagsStart, indices.tagsEnd).map((t) => generateSlug(t))
+        : segments.tags;
+
+      const translatedAlts = indices.altsStart >= 0
+        ? translated.texts.slice(indices.altsStart, indices.altsEnd)
+        : [];
+
+      const translatedTitles = indices.titlesStart >= 0
+        ? translated.texts.slice(indices.titlesStart, indices.titlesEnd)
+        : [];
+
+      // Reassemble full translated article
+      const fullContent = reassembleTranslation(
+        segments,
+        {
+          title: translatedTitle,
+          excerpt: translatedExcerpt,
+          body: translatedBody,
+          categories: translatedCats,
+          tags: translatedTags,
+          imageAlts: translatedAlts,
+          imageTitles: translatedTitles,
+        },
+        dirCode,
+        slug,
+      );
+
+      results.push({
+        lang: dirCode,
+        deeplLang: deeplTarget,
+        content: fullContent,
+        billedChars: translated.billedChars,
+        detectedSourceLang: translated.detectedLang,
+      });
+    }
+
+    res.json({ translations: results, totalBilledChars });
+  } catch (err) {
+    console.error('Error translating article:', err.message);
+    res.status(500).json({ error: `Translation failed: ${err.message}` });
+  }
+});
+
+// POST /api/save-translation — save a translated article to blog/{lang}/{slug}.md
+app.post('/api/save-translation', (req, res) => {
+  try {
+    const { slug, lang, content } = req.body;
+
+    if (!slug || !lang || !content) {
+      return res.status(400).json({ error: 'slug, lang, and content are required' });
+    }
+
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return res.status(400).json({ error: 'Invalid slug format' });
+    }
+    if (!/^[a-z]{2,5}$/.test(lang)) {
+      return res.status(400).json({ error: 'Invalid language code' });
+    }
+
+    const langDir = path.join(blogDir, lang);
+    if (!fs.existsSync(langDir)) {
+      fs.mkdirSync(langDir, { recursive: true });
+    }
+
+    const filePath = path.join(langDir, `${slug}.md`);
+    fs.writeFileSync(filePath, content, 'utf-8');
+
+    res.json({ success: true, path: `blog/${lang}/${slug}.md` });
+  } catch (err) {
+    console.error('Error saving translation:', err.message);
+    res.status(500).json({ error: 'Failed to save translation' });
+  }
+});
+
+// GET /api/deepl-usage — get DeepL API character usage
+app.get('/api/deepl-usage', async (req, res) => {
+  try {
+    if (!deeplClient) return res.status(503).json({ error: 'DEEPL_API_KEY is not configured' });
+    const usage = await getDeepLUsage(deeplClient);
+    res.json(usage);
+  } catch (err) {
+    console.error('Error fetching DeepL usage:', err.message);
+    res.status(500).json({ error: `Failed to fetch usage: ${err.message}` });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 
@@ -388,5 +690,8 @@ app.listen(PORT, () => {
   console.log(`Images directory: ${imagesDir}`);
   if (!process.env.GEMINI_API_KEY) {
     console.warn('WARNING: GEMINI_API_KEY is not set. Image generation and AI features will be unavailable.');
+  }
+  if (!process.env.DEEPL_API_KEY) {
+    console.warn('WARNING: DEEPL_API_KEY is not set. Translation features will be unavailable.');
   }
 });

@@ -214,29 +214,35 @@ Open `http://localhost:5173` in your browser.
 - **Slug collision detection** — warns if a `blog/{slug}.md` file already exists
 - **Category/tag autocomplete** — shows existing values from blog posts as clickable chips + hardcoded defaults (PPC, SEO, Pharma, Rx, HCP, AI, OTC, Employer Branding)
 - **AI-powered "Analyze Article"** — single-click analysis using Gemini 2.5 Flash-Lite that auto-fills: SEO meta title (60 chars), meta description (155 chars), slug, featured image prompt + SEO filename, and 2 body image prompts with target sections
-- **Featured image generation** — generates images via Gemini 3 Pro Image (Nano Banana Pro) with preview, SEO filename, and auto-set `featured_image` path
-- **Body image generation & drag-drop** — generate section images from AI-suggested or custom prompts, drag thumbnails into drop zones in the preview to insert markdown image references
+- **Featured image generation** — generates photorealistic images via Gemini 3 Pro Image (Nano Banana Pro) with preview, editable SEO filename, and auto-set `featured_image` path
+- **Body image generation & drag-drop** — generate section images from AI-suggested or custom prompts with editable SEO filenames, drag thumbnails into drop zones in the preview to insert markdown image references
 - **SEO meta fields** — `custom_fields: meta_title` and `meta_description` in YAML front matter with character counters
+- **Translation** — translate articles to multiple languages via DeepL API with formality control, quota tracking, and batch save
+- **Unsaved changes protection** — browser warns before closing/navigating away when content is entered; Reset button requires confirmation
 - **Save to disk** — writes directly to `blog/{slug}.md`
 - **Copy to clipboard** — copies the full Markdown output
 - **Heading hierarchy fix** — H1 headings in pasted content are automatically demoted to H2
 - **Czech/Slovak typography cleanup** — normalizes typographic quotes, dashes, non-breaking spaces
 
 ### Architecture
-- `_converter/web/server.js` — Express API (port 3001): blog file listing, categories/tags extraction, article analysis (Gemini), image generation (Gemini), image serving, file saving
-- `_converter/web/src/App.jsx` — React UI: 3-column layout (paste, form, preview) with drag-and-drop image insertion
-- `_converter/web/src/lib/api.js` — Client-side fetch wrappers for AI endpoints (`analyzeArticle`, `generateImage`)
+- `_converter/web/server.js` — Express API (port 3001): blog file listing, categories/tags extraction, article analysis (Gemini), image generation (Gemini), image serving, file saving, translation (DeepL)
+- `_converter/web/src/App.jsx` — React UI: tabbed layout (Converter + Translate) with 3-column converter (paste, form, preview) and drag-and-drop image insertion
+- `_converter/web/src/lib/api.js` — Client-side fetch wrappers for AI, image, and translation endpoints
 - `_converter/web/src/lib/slug.js` — SK/CZ-aware slug generation
 - `_converter/web/src/lib/frontmatter.js` — YAML front matter builder (includes `custom_fields` for SEO meta)
 - `_converter/web/src/lib/cleanup.js` — Markdown post-processing pipeline
 - `_converter/web/src/lib/turndown-config.js` — Configured Turndown instance with GFM support
+- `_converter/web/src/lib/deepl.js` — DeepL API client wrapper (translate, usage, language mapping)
+- `_converter/web/src/lib/translation.js` — Article translation helpers (segment extraction, reassembly, slug humanization)
 
 ## AI Image Generation (Integrated in Web App)
 
 Image generation is fully integrated into the web converter app. No separate CLI tools or Python scripts needed.
 
 ### Setup
-- **API key**: Set `GEMINI_API_KEY` in `.env` file at repo root (gitignored)
+- **API keys**: Set in `.env` file at repo root (gitignored):
+  - `GEMINI_API_KEY` — for AI analysis and image generation
+  - `DEEPL_API_KEY` — for article translation (optional)
 - **Models**:
   - Text analysis: `gemini-2.5-flash-lite` (cheap, $0.10/$0.40 per 1M tokens)
   - Image generation: `gemini-3-pro-image-preview` (Nano Banana Pro — uses internal "Thinking" for high-fidelity output)
@@ -249,11 +255,16 @@ Image generation is fully integrated into the web converter app. No separate CLI
 4. Click **"Generate"** on each image prompt — Gemini 3 Pro creates the image
 5. Featured image is auto-set in front matter; body images are dragged into drop zones in the preview
 
+### Image Style
+- All generated images are **photorealistic** (real-world photography style, not illustrations/cartoons)
+- No text, words, letters, typography, watermarks, or logos in generated images
+- Style prefix enforces natural lighting, realistic textures, high-end camera look
+
 ### Image Processing
 - Images are processed via `sharp`: max 1600px width, JPEG quality 85
 - Saved to `_images/{slug}/{seo-filename}.jpg`
 - Alt text (max 125 chars) and title (max 200 chars) are auto-generated from the prompt
-- SEO filenames are auto-generated from prompts (lowercase, hyphens, 3-5 keywords)
+- SEO filenames are auto-generated from prompts (lowercase, hyphens, 3-5 keywords) — editable before generation
 
 ### API Endpoints (server.js)
 
@@ -265,6 +276,11 @@ Image generation is fully integrated into the web converter app. No separate CLI
 | `GET` | `/api/blog-files` | List existing .md files |
 | `GET` | `/api/categories` | Extract categories/tags from blog posts |
 | `POST` | `/api/save` | Save markdown to `blog/{slug}.md` |
+| `GET` | `/api/translation-status/:slug` | Check which translations exist |
+| `POST` | `/api/estimate-translation` | Estimate DeepL character cost |
+| `POST` | `/api/translate-article` | Translate article via DeepL |
+| `POST` | `/api/save-translation` | Save translated article to `blog/{lang}/{slug}.md` |
+| `GET` | `/api/deepl-usage` | Get DeepL API character usage stats |
 
 ## Template
 

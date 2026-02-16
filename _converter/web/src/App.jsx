@@ -3,7 +3,7 @@ import htmlToMarkdown from './lib/turndown-config';
 import { cleanupMarkdown } from './lib/cleanup';
 import { generateSlug } from './lib/slug';
 import { buildFrontmatter } from './lib/frontmatter';
-import { analyzeArticle, generateImage } from './lib/api';
+import { analyzeArticle, generateImage, getTranslationStatus, estimateTranslation, translateArticle, saveTranslation, getDeeplUsage } from './lib/api';
 import './App.css';
 
 const DEFAULT_CATEGORIES = [
@@ -63,7 +63,380 @@ function DropZone({ onDrop }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Language config for TranslateView
+// ---------------------------------------------------------------------------
+
+const LANG_CONFIG = {
+  sk: { name: 'Slovak', color: '#3B82F6' },
+  cs: { name: 'Czech', color: '#EF4444' },
+  en: { name: 'English', color: '#10B981' },
+  de: { name: 'German', color: '#F59E0B' },
+  fr: { name: 'French', color: '#8B5CF6' },
+  es: { name: 'Spanish', color: '#EC4899' },
+  pl: { name: 'Polish', color: '#F97316' },
+  hu: { name: 'Hungarian', color: '#14B8A6' },
+};
+
+const DEFAULT_LANGS = ['sk', 'cs', 'en'];
+
+// ---------------------------------------------------------------------------
+// TranslateView component
+// ---------------------------------------------------------------------------
+
+function TranslateView() {
+  const [files, setFiles] = useState([]);
+  const [selectedSlug, setSelectedSlug] = useState('');
+  const [sourceLang, setSourceLang] = useState('');
+  const [targetLangs, setTargetLangs] = useState({});
+  const [translationStatus, setTranslationStatus] = useState({});
+  const [estimate, setEstimate] = useState(null);
+  const [translations, setTranslations] = useState({});
+  const [translating, setTranslating] = useState(false);
+  const [formality, setFormality] = useState('default');
+  const [activePreviewLang, setActivePreviewLang] = useState('');
+  const [deeplUsage, setDeeplUsage] = useState(null);
+  const [saveStatuses, setSaveStatuses] = useState({});
+  const [showExtra, setShowExtra] = useState(false);
+
+  // Load file list on mount
+  useEffect(() => {
+    fetch('/api/blog-files')
+      .then((r) => r.json())
+      .then((data) => setFiles(data.filter((f) => f !== 'index.md')))
+      .catch(() => setFiles([]));
+
+    // Fetch initial DeepL usage
+    getDeeplUsage()
+      .then(setDeeplUsage)
+      .catch(() => {});
+  }, []);
+
+  // When article is selected, fetch translation status
+  useEffect(() => {
+    if (!selectedSlug) {
+      setSourceLang('');
+      setTargetLangs({});
+      setTranslationStatus({});
+      setEstimate(null);
+      setTranslations({});
+      return;
+    }
+
+    getTranslationStatus(selectedSlug)
+      .then((data) => {
+        setSourceLang(data.sourceLang || '');
+        setTranslationStatus(data.translations || {});
+        setEstimate({ charsPerLang: data.charsEstimate });
+
+        // Pre-check default targets
+        const defaults = {};
+        for (const lang of data.defaultTargets || []) {
+          defaults[lang] = true;
+        }
+        setTargetLangs(defaults);
+        setTranslations({});
+        setSaveStatuses({});
+      })
+      .catch(() => {});
+  }, [selectedSlug]);
+
+  const toggleLang = (lang) => {
+    setTargetLangs((prev) => ({ ...prev, [lang]: !prev[lang] }));
+  };
+
+  const selectedTargets = Object.entries(targetLangs)
+    .filter(([, v]) => v)
+    .map(([k]) => k);
+
+  const totalEstimate = (estimate?.charsPerLang || 0) * selectedTargets.length;
+
+  const handleEstimate = async () => {
+    if (!selectedSlug || !selectedTargets.length) return;
+    try {
+      const data = await estimateTranslation(selectedSlug, selectedTargets);
+      setEstimate(data);
+      setDeeplUsage({ count: data.quota.used, limit: data.quota.limit, percent: data.quota.percent });
+    } catch (err) {
+      alert('Estimation failed: ' + err.message);
+    }
+  };
+
+  const handleTranslate = async () => {
+    if (!selectedSlug || !selectedTargets.length) return;
+    setTranslating(true);
+    try {
+      const result = await translateArticle(selectedSlug, selectedTargets, {
+        formality: formality !== 'default' ? formality : undefined,
+      });
+      const translationMap = {};
+      for (const t of result.translations) {
+        translationMap[t.lang] = t;
+      }
+      setTranslations(translationMap);
+      if (result.translations.length > 0) {
+        setActivePreviewLang(result.translations[0].lang);
+      }
+      // Refresh usage
+      getDeeplUsage().then(setDeeplUsage).catch(() => {});
+      // Refresh status
+      getTranslationStatus(selectedSlug)
+        .then((data) => setTranslationStatus(data.translations || {}))
+        .catch(() => {});
+    } catch (err) {
+      alert('Translation failed: ' + err.message);
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const handleSave = async (lang) => {
+    const t = translations[lang];
+    if (!t) return;
+    setSaveStatuses((prev) => ({ ...prev, [lang]: 'saving' }));
+    try {
+      await saveTranslation(selectedSlug, lang, t.content);
+      setSaveStatuses((prev) => ({ ...prev, [lang]: 'saved' }));
+      // Refresh status
+      getTranslationStatus(selectedSlug)
+        .then((data) => setTranslationStatus(data.translations || {}))
+        .catch(() => {});
+    } catch (err) {
+      setSaveStatuses((prev) => ({ ...prev, [lang]: 'error' }));
+    }
+  };
+
+  const handleSaveAll = async () => {
+    for (const lang of Object.keys(translations)) {
+      await handleSave(lang);
+    }
+  };
+
+  const translatedLangs = Object.keys(translations);
+
+  return (
+    <div className="translate-layout">
+      {/* Left: Controls */}
+      <div className="translate-controls">
+        <h2>Translate Article</h2>
+
+        <label>Select Article</label>
+        <select
+          value={selectedSlug}
+          onChange={(e) => setSelectedSlug(e.target.value)}
+        >
+          <option value="">-- Select an article --</option>
+          {files.map((f) => {
+            const s = f.replace(/\.md$/, '');
+            return (
+              <option key={s} value={s}>
+                {f}
+              </option>
+            );
+          })}
+        </select>
+
+        {sourceLang && (
+          <div className="source-lang-badge">
+            Source:{' '}
+            <span
+              className="lang-chip"
+              style={{ background: LANG_CONFIG[sourceLang.toLowerCase()]?.color || '#888' }}
+            >
+              {LANG_CONFIG[sourceLang.toLowerCase()]?.name || sourceLang}
+            </span>
+          </div>
+        )}
+
+        {selectedSlug && (
+          <>
+            <h3>Target Languages</h3>
+            <div className="lang-grid">
+              {DEFAULT_LANGS.map((lang) => (
+                <label key={lang} className="lang-option">
+                  <input
+                    type="checkbox"
+                    checked={!!targetLangs[lang]}
+                    onChange={() => toggleLang(lang)}
+                  />
+                  <span
+                    className="lang-chip-sm"
+                    style={{ background: LANG_CONFIG[lang]?.color || '#888' }}
+                  >
+                    {lang.toUpperCase()}
+                  </span>
+                  {LANG_CONFIG[lang]?.name}
+                  {translationStatus[lang]?.exists && (
+                    <span className="status-dot status-exists" title="Translation exists" />
+                  )}
+                  {!translationStatus[lang]?.exists && (
+                    <span className="status-dot status-missing" title="No translation" />
+                  )}
+                </label>
+              ))}
+            </div>
+
+            <button className="btn-tiny" onClick={() => setShowExtra(!showExtra)}>
+              {showExtra ? 'Hide extra languages' : '+ More languages'}
+            </button>
+
+            {showExtra && (
+              <div className="lang-grid extra-langs">
+                {Object.entries(LANG_CONFIG)
+                  .filter(([k]) => !DEFAULT_LANGS.includes(k))
+                  .map(([lang, cfg]) => (
+                    <label key={lang} className="lang-option">
+                      <input
+                        type="checkbox"
+                        checked={!!targetLangs[lang]}
+                        onChange={() => toggleLang(lang)}
+                      />
+                      <span className="lang-chip-sm" style={{ background: cfg.color }}>
+                        {lang.toUpperCase()}
+                      </span>
+                      {cfg.name}
+                    </label>
+                  ))}
+              </div>
+            )}
+
+            {/* Estimate */}
+            <div className="estimate-panel">
+              <h3>Character Estimate</h3>
+              <div className="estimate-row">
+                <span>Per language:</span>
+                <strong>{(estimate?.charsPerLang || 0).toLocaleString()} chars</strong>
+              </div>
+              <div className="estimate-row">
+                <span>Total ({selectedTargets.length} lang{selectedTargets.length !== 1 ? 's' : ''}):</span>
+                <strong>{totalEstimate.toLocaleString()} chars</strong>
+              </div>
+              {deeplUsage && (
+                <>
+                  <div className="quota-bar-container">
+                    <div className="quota-bar">
+                      <div
+                        className="quota-bar-fill"
+                        style={{ width: `${Math.min(deeplUsage.percent, 100)}%` }}
+                      />
+                    </div>
+                    <span className="quota-text">
+                      {deeplUsage.count.toLocaleString()} / {deeplUsage.limit.toLocaleString()} ({deeplUsage.percent}%)
+                    </span>
+                  </div>
+                  {deeplUsage.limit - deeplUsage.count < totalEstimate && (
+                    <div className="quota-warning">Insufficient quota for this translation!</div>
+                  )}
+                </>
+              )}
+              <button className="btn btn-secondary" onClick={handleEstimate} disabled={!selectedTargets.length}>
+                Refresh Estimate
+              </button>
+            </div>
+
+            {/* Formality */}
+            <label>Formality</label>
+            <select value={formality} onChange={(e) => setFormality(e.target.value)}>
+              <option value="default">Default</option>
+              <option value="more">More formal</option>
+              <option value="less">Less formal</option>
+              <option value="prefer_more">Prefer more formal</option>
+              <option value="prefer_less">Prefer less formal</option>
+            </select>
+
+            {/* Action buttons */}
+            <div className="translate-actions">
+              <button
+                className="btn btn-primary"
+                onClick={handleTranslate}
+                disabled={!selectedTargets.length || translating}
+              >
+                {translating ? (
+                  <>
+                    <span className="spinner" /> Translating...
+                  </>
+                ) : (
+                  `Translate to ${selectedTargets.length} language${selectedTargets.length !== 1 ? 's' : ''}`
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Right: Preview */}
+      <div className="translate-preview">
+        <h2>Translation Preview</h2>
+
+        {translatedLangs.length > 0 ? (
+          <>
+            <div className="translation-tabs">
+              {translatedLangs.map((lang) => (
+                <button
+                  key={lang}
+                  className={`translation-tab ${activePreviewLang === lang ? 'active' : ''}`}
+                  onClick={() => setActivePreviewLang(lang)}
+                  style={{ borderColor: LANG_CONFIG[lang]?.color || '#888' }}
+                >
+                  <span className="lang-chip-sm" style={{ background: LANG_CONFIG[lang]?.color || '#888' }}>
+                    {lang.toUpperCase()}
+                  </span>
+                  {LANG_CONFIG[lang]?.name || lang}
+                  {translations[lang]?.billedChars && (
+                    <span className="chars-badge">{translations[lang].billedChars.toLocaleString()} chars</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {activePreviewLang && translations[activePreviewLang] && (
+              <div className="preview-scroll">
+                <pre className="preview-block">{translations[activePreviewLang].content}</pre>
+              </div>
+            )}
+
+            <div className="save-row">
+              {translatedLangs.map((lang) => (
+                <button
+                  key={lang}
+                  className={`btn ${saveStatuses[lang] === 'saved' ? 'btn-saved' : 'btn-secondary'}`}
+                  onClick={() => handleSave(lang)}
+                  disabled={saveStatuses[lang] === 'saving'}
+                >
+                  {saveStatuses[lang] === 'saving'
+                    ? 'Saving...'
+                    : saveStatuses[lang] === 'saved'
+                    ? `Saved ${lang.toUpperCase()}`
+                    : `Save ${lang.toUpperCase()}`}
+                </button>
+              ))}
+              {translatedLangs.length > 1 && (
+                <button className="btn btn-primary" onClick={handleSaveAll}>
+                  Save All
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="translate-empty">
+            {selectedSlug
+              ? 'Select target languages and click Translate to see results here.'
+              : 'Select an article to begin translating.'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main App component
+// ---------------------------------------------------------------------------
+
 function App() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState('converter');
+
   // Existing state
   const [html, setHtml] = useState('');
   const [markdown, setMarkdown] = useState('');
@@ -101,10 +474,13 @@ function App() {
   // New state: Body images
   const [bodyImages, setBodyImages] = useState([]);
   const [bodyImagePrompt, setBodyImagePrompt] = useState('');
+  const [bodyImageSeoName, setBodyImageSeoName] = useState('');
+  const [bodyImageSeoManual, setBodyImageSeoManual] = useState(false);
   const [bodyImageLoading, setBodyImageLoading] = useState(false);
   const [draggedImage, setDraggedImage] = useState(null);
 
   const pasteRef = useRef(null);
+  const featuredPreviewRef = useRef(null);
 
   // Merge default categories with fetched ones
   const allCategories = useMemo(() => {
@@ -116,6 +492,21 @@ function App() {
       a.label.localeCompare(b.label)
     );
   }, [existingCategories]);
+
+  // Track whether there's unsaved work
+  const hasUnsavedWork = !!(markdown || title || featuredPreview || bodyImages.length > 0);
+
+  // Warn before closing/navigating away with unsaved content
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedWork) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedWork]);
 
   // On mount: fetch existing data and set default date
   useEffect(() => {
@@ -158,6 +549,15 @@ function App() {
       setFeaturedSeoName('');
     }
   }, [featuredPrompt, featuredSeoManual]);
+
+  // Auto-generate body image SEO name when prompt changes (unless manually edited)
+  useEffect(() => {
+    if (!bodyImageSeoManual && bodyImagePrompt) {
+      setBodyImageSeoName(promptToFilename(bodyImagePrompt));
+    } else if (!bodyImageSeoManual && !bodyImagePrompt) {
+      setBodyImageSeoName('');
+    }
+  }, [bodyImagePrompt, bodyImageSeoManual]);
 
   // Paste handler
   const handlePaste = (e) => {
@@ -325,6 +725,9 @@ function App() {
 
   // Reset handler
   const handleReset = () => {
+    if (hasUnsavedWork && !window.confirm('You have unsaved content. Are you sure you want to reset everything?')) {
+      return;
+    }
     setHtml('');
     setMarkdown('');
     setTitle('');
@@ -348,6 +751,8 @@ function App() {
     setFeaturedSeoManual(false);
     setBodyImages([]);
     setBodyImagePrompt('');
+    setBodyImageSeoName('');
+    setBodyImageSeoManual(false);
     setBodyImageLoading(false);
     setDraggedImage(null);
     if (pasteRef.current) {
@@ -427,6 +832,10 @@ function App() {
       const result = await generateImage(slug, featuredPrompt, featuredSeoName);
       setFeaturedImage(result.image.path);
       setFeaturedPreview(result.image.previewUrl);
+      // Scroll to the preview after a short delay to let the image render
+      setTimeout(() => {
+        featuredPreviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
     } catch (err) {
       alert('Image generation failed: ' + err.message);
     } finally {
@@ -438,7 +847,7 @@ function App() {
   const handleGenerateBodyImage = async () => {
     setBodyImageLoading(true);
     try {
-      const seoName = promptToFilename(bodyImagePrompt);
+      const seoName = bodyImageSeoName || promptToFilename(bodyImagePrompt);
       const result = await generateImage(slug, bodyImagePrompt, seoName);
       const newImage = {
         id: Date.now(),
@@ -448,6 +857,8 @@ function App() {
       };
       setBodyImages(prev => [...prev, newImage]);
       setBodyImagePrompt('');
+      setBodyImageSeoName('');
+      setBodyImageSeoManual(false);
     } catch (err) {
       alert('Body image generation failed: ' + err.message);
     } finally {
@@ -488,10 +899,26 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Rich Text &rarr; Markdown</h1>
+        <h1>Teapot Content Tools</h1>
+        <nav className="tab-nav">
+          <button
+            className={activeTab === 'converter' ? 'active' : ''}
+            onClick={() => setActiveTab('converter')}
+          >
+            Converter
+          </button>
+          <button
+            className={activeTab === 'translate' ? 'active' : ''}
+            onClick={() => setActiveTab('translate')}
+          >
+            Translate
+          </button>
+        </nav>
       </header>
 
-      <div className="main-layout">
+      {activeTab === 'translate' && <TranslateView />}
+
+      {activeTab === 'converter' && <><div className="main-layout">
         {/* Left column: paste area */}
         <div className="column paste-column">
           <h2>Paste Rich Text</h2>
@@ -713,8 +1140,9 @@ function App() {
             )}
 
             {featuredPreview && (
-              <div className="featured-preview">
+              <div className="featured-preview" ref={featuredPreviewRef}>
                 <img src={featuredPreview} alt="Featured image preview" />
+                <div className="featured-preview-label">Blog header / hero image</div>
                 {featuredImage && (
                   <div className="featured-path">{featuredImage}</div>
                 )}
@@ -736,26 +1164,55 @@ function App() {
               <div className="suggested-images">
                 {suggestedBodyImages.map((suggestion, idx) => (
                   <div key={idx} className={`suggested-image-card ${suggestion.generated ? 'generated' : ''}`}>
-                    <div className="suggested-prompt">{suggestion.prompt}</div>
                     <div className="suggested-section">After: {suggestion.afterSection}</div>
                     {suggestion.generated ? (
-                      <span className="suggested-done">Generated</span>
+                      <>
+                        <div className="suggested-prompt">{suggestion.prompt}</div>
+                        <span className="suggested-done">Generated</span>
+                      </>
                     ) : (
-                      <button
-                        className="btn-generate"
-                        onClick={() => handleGenerateSuggestedImage(suggestion, idx)}
-                        disabled={!slug || suggestion.loading}
-                        style={{ marginTop: '0.3rem' }}
-                      >
-                        {suggestion.loading ? (
-                          <>
-                            <span className="spinner" />
-                            Generating...
-                          </>
-                        ) : (
-                          'Generate'
-                        )}
-                      </button>
+                      <>
+                        <label className="suggested-label">Prompt</label>
+                        <textarea
+                          className="suggested-input"
+                          value={suggestion.prompt}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSuggestedBodyImages(prev =>
+                              prev.map((s, i) => i === idx ? { ...s, prompt: val } : s)
+                            );
+                          }}
+                          rows={2}
+                        />
+                        <label className="suggested-label">SEO Filename</label>
+                        <input
+                          className="suggested-input"
+                          type="text"
+                          value={suggestion.seoFilename || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSuggestedBodyImages(prev =>
+                              prev.map((s, i) => i === idx ? { ...s, seoFilename: val } : s)
+                            );
+                          }}
+                          placeholder="seo-friendly-filename"
+                        />
+                        <button
+                          className="btn-generate"
+                          onClick={() => handleGenerateSuggestedImage(suggestion, idx)}
+                          disabled={!slug || suggestion.loading}
+                          style={{ marginTop: '0.3rem' }}
+                        >
+                          {suggestion.loading ? (
+                            <>
+                              <span className="spinner" />
+                              Generating...
+                            </>
+                          ) : (
+                            'Generate'
+                          )}
+                        </button>
+                      </>
                     )}
                   </div>
                 ))}
@@ -763,29 +1220,57 @@ function App() {
             )}
 
             {/* Manual prompt input */}
+            <label className="suggested-label" style={{ marginTop: '0.5rem' }}>Custom Image Prompt</label>
             <div className="prompt-row">
               <input
                 type="text"
                 value={bodyImagePrompt}
                 onChange={(e) => setBodyImagePrompt(e.target.value)}
-                placeholder="Or describe a custom body image..."
+                placeholder="Describe a custom body image..."
               />
-              <button
-                className="btn-generate"
-                onClick={handleGenerateBodyImage}
-                disabled={!slug || !bodyImagePrompt || bodyImageLoading}
-                style={{ marginTop: 0 }}
-              >
-                {bodyImageLoading ? (
-                  <>
-                    <span className="spinner" />
-                    Generating...
-                  </>
-                ) : (
-                  'Generate'
-                )}
-              </button>
             </div>
+            {bodyImagePrompt && (
+              <>
+                <label className="suggested-label">SEO Filename</label>
+                <div className="slug-row" style={{ marginBottom: '0.3rem' }}>
+                  <input
+                    type="text"
+                    value={bodyImageSeoName}
+                    onChange={(e) => {
+                      setBodyImageSeoName(e.target.value);
+                      setBodyImageSeoManual(true);
+                    }}
+                    placeholder="seo-friendly-filename"
+                  />
+                  {bodyImageSeoManual && (
+                    <button
+                      onClick={() => {
+                        setBodyImageSeoManual(false);
+                        setBodyImageSeoName(promptToFilename(bodyImagePrompt));
+                      }}
+                      className="btn-tiny"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+            <button
+              className="btn-generate"
+              onClick={handleGenerateBodyImage}
+              disabled={!slug || !bodyImagePrompt || bodyImageLoading}
+              style={{ marginTop: '0.3rem' }}
+            >
+              {bodyImageLoading ? (
+                <>
+                  <span className="spinner" />
+                  Generating...
+                </>
+              ) : (
+                'Generate'
+              )}
+            </button>
 
             {bodyImages.length > 0 && <p className="hint" style={{ marginTop: '0.4rem', marginBottom: '0.2rem' }}>Drag images into the preview below to insert them.</p>}
             {bodyImages.length > 0 && (
@@ -862,6 +1347,7 @@ function App() {
           <span className={`save-message ${saveStatus}`}>{saveMessage}</span>
         )}
       </div>
+      </>}
     </div>
   );
 }
