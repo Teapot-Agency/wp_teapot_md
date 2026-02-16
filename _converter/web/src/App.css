@@ -127,7 +127,7 @@ body {
   display: block;
   font-weight: 600;
   font-size: 0.85rem;
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   margin-bottom: 0.2rem;
   color: #333;
 }
@@ -343,7 +343,7 @@ body {
 .btn-analyze {
   width: 100%;
   padding: 10px 20px;
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   margin-bottom: 0.25rem;
   border: none;
   border-radius: 6px;
@@ -987,6 +987,93 @@ textarea.suggested-input {
   background: #219a52;
 }
 
+/* ---- Collapsible sections ---- */
+details.collapsible {
+  margin-top: 0.5rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+details.collapsible summary {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #111;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+details.collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+details.collapsible summary::before {
+  content: '▸';
+  display: inline-block;
+  font-size: 0.75rem;
+  transition: transform 0.15s;
+}
+
+details.collapsible[open] summary::before {
+  transform: rotate(90deg);
+}
+
+details.collapsible[open] summary {
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.collapsible-content {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.collapsible-content > label:first-child,
+.collapsible-content > div > label:first-child {
+  margin-top: 0.25rem;
+}
+
+/* ---- Two-column row (Categories + Tags) ---- */
+.two-col-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* ---- Compact featured image thumbnail ---- */
+.featured-preview-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+}
+
+.featured-preview-compact img {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+.featured-preview-compact a:hover img {
+  border-color: #3BC1CA;
+}
+
+.featured-info {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
   .main-layout {
@@ -1008,6 +1095,10 @@ textarea.suggested-input {
   }
 
   .translate-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .two-col-row {
     grid-template-columns: 1fr;
   }
 }

@@ -479,6 +479,12 @@ function App() {
   const [bodyImageLoading, setBodyImageLoading] = useState(false);
   const [draggedImage, setDraggedImage] = useState(null);
 
+  // Collapsible section states
+  const [seoOpen, setSeoOpen] = useState(false);
+  const [catTagsOpen, setCatTagsOpen] = useState(false);
+  const [featuredOpen, setFeaturedOpen] = useState(false);
+  const [bodyImagesOpen, setBodyImagesOpen] = useState(false);
+
   const pasteRef = useRef(null);
   const featuredPreviewRef = useRef(null);
 
@@ -581,6 +587,24 @@ function App() {
       const match = converted.match(/^#{1,2} (.+)$/m);
       if (match) {
         setTitle(match[1].trim());
+      }
+    }
+  };
+
+  // Input handler - updates markdown when contenteditable is manually edited
+  const handleInput = () => {
+    if (pasteRef.current) {
+      const currentHtml = pasteRef.current.innerHTML;
+      setHtml(currentHtml);
+      const converted = cleanupMarkdown(htmlToMarkdown(currentHtml));
+      setMarkdown(converted);
+
+      // Auto-extract title from first H1 or H2 if title is empty
+      if (!title) {
+        const match = converted.match(/^#{1,2} (.+)$/m);
+        if (match) {
+          setTitle(match[1].trim());
+        }
       }
     }
   };
@@ -755,6 +779,10 @@ function App() {
     setBodyImageSeoManual(false);
     setBodyImageLoading(false);
     setDraggedImage(null);
+    setSeoOpen(false);
+    setCatTagsOpen(false);
+    setFeaturedOpen(false);
+    setBodyImagesOpen(false);
     if (pasteRef.current) {
       pasteRef.current.innerHTML = '';
     }
@@ -804,6 +832,7 @@ function App() {
       const result = await analyzeArticle(title, markdown);
       setMetaTitle(result.metaTitle || '');
       setMetaDescription(result.metaDescription || '');
+      setSeoOpen(true);
       if (result.slug) {
         setSlug(result.slug);
         setSlugManual(true);
@@ -814,9 +843,11 @@ function App() {
           setFeaturedSeoName(result.featuredImage.seoFilename);
           setFeaturedSeoManual(true);
         }
+        setFeaturedOpen(true);
       }
       if (result.bodyImages && result.bodyImages.length > 0) {
         setSuggestedBodyImages(result.bodyImages);
+        setBodyImagesOpen(true);
       }
     } catch (err) {
       alert('Article analysis failed: ' + err.message);
@@ -926,6 +957,7 @@ function App() {
             className="paste-area"
             contentEditable
             onPaste={handlePaste}
+            onInput={handleInput}
             ref={pasteRef}
             data-placeholder="Paste rich text here..."
           />
@@ -1012,143 +1044,157 @@ function App() {
           />
 
           {/* SEO Meta Fields */}
-          <div className="meta-section">
-            <h3>SEO Meta Fields</h3>
+          <details className="collapsible" open={seoOpen} onToggle={(e) => setSeoOpen(e.currentTarget.open)}>
+            <summary>SEO Meta Fields</summary>
+            <div className="collapsible-content">
+              <label>
+                SEO Meta Title{' '}
+                <span className={`char-counter-textarea ${metaTitle.length > 60 ? 'over' : ''}`}>
+                  {metaTitle.length}/60
+                </span>
+              </label>
+              <div className="field-with-counter">
+                <input
+                  type="text"
+                  value={metaTitle}
+                  onChange={(e) => setMetaTitle(e.target.value)}
+                  placeholder="SEO title (max 60 chars)"
+                />
+              </div>
 
-            <label>
-              SEO Meta Title{' '}
-              <span className={`char-counter-textarea ${metaTitle.length > 60 ? 'over' : ''}`}>
-                {metaTitle.length}/60
-              </span>
-            </label>
-            <div className="field-with-counter">
-              <input
-                type="text"
-                value={metaTitle}
-                onChange={(e) => setMetaTitle(e.target.value)}
-                placeholder="SEO title (max 60 chars)"
+              <label>
+                SEO Meta Description{' '}
+                <span className={`char-counter-textarea ${metaDescription.length > 155 ? 'over' : ''}`}>
+                  {metaDescription.length}/155
+                </span>
+              </label>
+              <textarea
+                value={metaDescription}
+                onChange={(e) => setMetaDescription(e.target.value)}
+                rows={3}
+                placeholder="Meta description (max 155 chars)"
               />
             </div>
+          </details>
 
-            <label>
-              SEO Meta Description{' '}
-              <span className={`char-counter-textarea ${metaDescription.length > 155 ? 'over' : ''}`}>
-                {metaDescription.length}/155
-              </span>
-            </label>
-            <textarea
-              value={metaDescription}
-              onChange={(e) => setMetaDescription(e.target.value)}
-              rows={3}
-              placeholder="Meta description (max 155 chars)"
-            />
-          </div>
-
-          <label>
-            Categories <span className="hint">(comma-separated)</span>
-          </label>
-          <input
-            type="text"
-            value={categories}
-            onChange={(e) => setCategories(e.target.value)}
-            placeholder="pharma, digital-health"
-          />
-          {allCategories.length > 0 && (
-            <div className="suggestions">
-              {allCategories.map((c) => (
-                <button key={c.slug} className="chip" onClick={() => addCategory(c.slug)}>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <label>
-            Tags <span className="hint">(comma-separated)</span>
-          </label>
-          <input
-            type="text"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="ai, marketing"
-          />
-          {existingTags.length > 0 && (
-            <div className="suggestions">
-              {existingTags.map((t) => (
-                <button key={t} className="chip" onClick={() => addTag(t)}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Featured Image Panel */}
-          <div className="featured-image-panel">
-            <h3>Featured Image</h3>
-
-            <label>Image Prompt</label>
-            <input
-              type="text"
-              value={featuredPrompt}
-              onChange={(e) => setFeaturedPrompt(e.target.value)}
-              placeholder="Describe the image to generate..."
-            />
-
-            <label>SEO Filename</label>
-            <div className="slug-row">
-              <input
-                type="text"
-                value={featuredSeoName}
-                onChange={(e) => {
-                  setFeaturedSeoName(e.target.value);
-                  setFeaturedSeoManual(true);
-                }}
-                placeholder="seo-friendly-filename"
-              />
-              {featuredSeoManual && (
-                <button
-                  onClick={() => {
-                    setFeaturedSeoManual(false);
-                    setFeaturedSeoName(promptToFilename(featuredPrompt));
-                  }}
-                  className="btn-tiny"
-                >
-                  Auto
-                </button>
-              )}
-            </div>
-
-            {slug && featuredSeoName && (
-              <div className="featured-path">
-                _images/{slug}/{featuredSeoName}.jpg
-              </div>
-            )}
-
-            {featuredImageLoading ? (
-              <div className="loading-text">
-                <span className="spinner" />
-                Generating... (15-30s)
-              </div>
-            ) : (
-              <button
-                className="btn-generate"
-                onClick={handleGenerateFeaturedImage}
-                disabled={!slug || !featuredPrompt || featuredImageLoading}
-              >
-                {featuredPreview ? 'Regenerate Image' : 'Generate Image'}
-              </button>
-            )}
-
-            {featuredPreview && (
-              <div className="featured-preview" ref={featuredPreviewRef}>
-                <img src={featuredPreview} alt="Featured image preview" />
-                <div className="featured-preview-label">Blog header / hero image</div>
-                {featuredImage && (
-                  <div className="featured-path">{featuredImage}</div>
+          <details className="collapsible" open={catTagsOpen} onToggle={(e) => setCatTagsOpen(e.currentTarget.open)}>
+            <summary>Categories & Tags</summary>
+            <div className="collapsible-content two-col-row">
+              <div>
+                <label>
+                  Categories <span className="hint">(comma-separated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={categories}
+                  onChange={(e) => setCategories(e.target.value)}
+                  placeholder="pharma, digital-health"
+                />
+                {allCategories.length > 0 && (
+                  <div className="suggestions">
+                    {allCategories.map((c) => (
+                      <button key={c.slug} className="chip" onClick={() => addCategory(c.slug)}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+              <div>
+                <label>
+                  Tags <span className="hint">(comma-separated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="ai, marketing"
+                />
+                {existingTags.length > 0 && (
+                  <div className="suggestions">
+                    {existingTags.map((t) => (
+                      <button key={t} className="chip" onClick={() => addTag(t)}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </details>
+
+          {/* Featured Image Panel */}
+          <details className="collapsible" open={featuredOpen} onToggle={(e) => setFeaturedOpen(e.currentTarget.open)}>
+            <summary>Featured Image</summary>
+            <div className="collapsible-content">
+              <label>Image Prompt</label>
+              <input
+                type="text"
+                value={featuredPrompt}
+                onChange={(e) => setFeaturedPrompt(e.target.value)}
+                placeholder="Describe the image to generate..."
+              />
+
+              <label>SEO Filename</label>
+              <div className="slug-row">
+                <input
+                  type="text"
+                  value={featuredSeoName}
+                  onChange={(e) => {
+                    setFeaturedSeoName(e.target.value);
+                    setFeaturedSeoManual(true);
+                  }}
+                  placeholder="seo-friendly-filename"
+                />
+                {featuredSeoManual && (
+                  <button
+                    onClick={() => {
+                      setFeaturedSeoManual(false);
+                      setFeaturedSeoName(promptToFilename(featuredPrompt));
+                    }}
+                    className="btn-tiny"
+                  >
+                    Auto
+                  </button>
+                )}
+              </div>
+
+              {slug && featuredSeoName && (
+                <div className="featured-path">
+                  _images/{slug}/{featuredSeoName}.jpg
+                </div>
+              )}
+
+              {featuredImageLoading ? (
+                <div className="loading-text">
+                  <span className="spinner" />
+                  Generating... (15-30s)
+                </div>
+              ) : (
+                <button
+                  className="btn-generate"
+                  onClick={handleGenerateFeaturedImage}
+                  disabled={!slug || !featuredPrompt || featuredImageLoading}
+                >
+                  {featuredPreview ? 'Regenerate Image' : 'Generate Image'}
+                </button>
+              )}
+
+              {featuredPreview && (
+                <div className="featured-preview-compact" ref={featuredPreviewRef}>
+                  <a href={featuredPreview} target="_blank" rel="noopener noreferrer">
+                    <img src={featuredPreview} alt="Featured image preview" />
+                  </a>
+                  <div className="featured-info">
+                    <div className="featured-preview-label">Blog header / hero image</div>
+                    {featuredImage && (
+                      <div className="featured-path">{featuredImage}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </details>
         </div>
 
         {/* Right column: body images + preview */}
@@ -1156,8 +1202,9 @@ function App() {
           <h2>Output Preview</h2>
 
           {/* Body Image Toolbar */}
-          <div className="body-image-toolbar">
-            <h3>Body Images</h3>
+          <details className="collapsible" open={bodyImagesOpen} onToggle={(e) => setBodyImagesOpen(e.currentTarget.open)}>
+            <summary>Body Images</summary>
+            <div className="collapsible-content">
 
             {/* Suggested image cards from Analyze */}
             {suggestedBodyImages.length > 0 && (
@@ -1305,7 +1352,8 @@ function App() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          </details>
 
           {/* Interactive preview with drop zones */}
           <div className="preview-scroll">
