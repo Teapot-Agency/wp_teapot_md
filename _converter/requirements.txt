@@ -1,9 +1,0 @@
-pymupdf>=1.25.0
-mammoth>=1.8.0
-striprtf>=0.0.26
-markdownify>=0.14.1
-Pillow>=11.0.0
-unidecode>=1.3.8
-python-dateutil>=2.9.0
-beautifulsoup4>=4.12.3
-google-genai>=1.0.0

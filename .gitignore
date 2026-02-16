@@ -19,3 +19,14 @@ Thumbs.db
 # Converter virtual environment & cache
 _converter/venv/
 __pycache__/
+
+# Plugin files (not part of content repo)
+git-it-write_plugin_v2.0/
+*.zip
+
+# Serena config
+.serena/
+
+# Web app
+_converter/web/node_modules/
+_converter/web/dist/

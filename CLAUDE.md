@@ -193,75 +193,78 @@ done
 - [ ] Filename is lowercase, hyphens only, no spaces
 - [ ] YAML uses spaces (no tabs)
 
-## Generating Images with Gemini (Nano Banana Pro)
+## Rich Text to Markdown Converter (Web App)
 
-The `_converter/` directory contains tools for AI image generation using Google's Gemini 3 Pro Image model.
+The `_converter/web/` directory contains a local React + Express web app for converting rich text (pasted from Google Docs, Word, web pages, etc.) into properly formatted Markdown with YAML front matter.
 
-### Setup
-- **API key**: Set `GEMINI_API_KEY` in `.env` file at repo root (gitignored), or export as environment variable, or pass `--api-key`
-- **Python venv**: `_converter/venv/` has all dependencies pre-installed (`google-genai`, `Pillow`)
-- **Model**: `gemini-3-pro-image-preview` (Nano Banana Pro)
-
-### Single Article Image Generation
+### Running the Converter
 
 ```bash
-GEMINI_API_KEY="your-key" _converter/venv/bin/python _converter/generate_images.py \
-    blog/my-post.md \
-    -p "Descriptive prompt for the image" \
-    -n "seo-friendly-filename" \
-    --featured
+cd _converter/web
+npm install          # first time only
+npm run dev          # starts Vite (port 5173) + Express API (port 3001)
 ```
 
-**Key options:**
-- `-p "prompt1" "prompt2"` — one or more image prompts (required)
-- `-n "name1" "name2"` — SEO-friendly filenames without extension (one per prompt). If omitted, auto-generates from prompt text
-- `--placement before-sections` — insert images before evenly-distributed headings (default)
-- `--placement manual` — save images only, don't modify the .md file
-- `--featured` — set first image as `featured_image` in front matter (default)
-- `--no-featured` — skip featured_image update
-- `--dry-run` — preview without API calls or file changes
-- `--aspect-ratio 16:9` — image aspect ratio (default: 16:9)
-- `--resolution 1K` — image resolution: 1K, 2K, or 4K (default: 1K)
+Open `http://localhost:5173` in your browser.
 
-### Batch Image Generation
-
-```bash
-# Generate featured images (1 per article)
-_converter/batch_generate.sh
-
-# Generate body images (2 per article, 4 parallel workers)
-_converter/batch_body_images.sh
-```
-
-Both scripts auto-load `.env` from repo root. Edit the scripts to update prompts and filenames.
-
-### Image SEO Process
-
-When generating images for articles, **always follow this process**:
-
-1. **Choose a descriptive filename** (`-n`) — WordPress uses the filename as the default image title/slug in the media library. Use lowercase, hyphens, 3-5 keywords describing the image content
-   - Good: `pharma-ai-analytics-dashboard`, `supplement-compliance-ftc-balance`
-   - Bad: `gen-001`, `image1`, `hero`
-2. **Write a detailed visual prompt** (`-p`) — the prompt is automatically converted to:
-   - **Alt text** (max 125 chars) — used for accessibility and SEO `alt` attribute
-   - **Title/caption** (max 200 chars) — used for image `title` hover text
-3. **Use `--dry-run`** first to preview filenames before generating
-4. Images are saved to `_images/{slug}/{seo-name}.jpg` (processed, max 1600px width, quality 85)
-
-**Filename priority:** explicit `-n` name > auto-generated from prompt > `gen-NNN` fallback
-
-### Image Prompt Guidelines
-- Write descriptive, visual prompts — the script prepends a default style prefix about healthcare/pharma editorial aesthetics
-- Use `--no-style` to disable the default prefix
-- Use `--style "Custom prefix"` for a different style
-- Keep prompts focused on visual elements: composition, colors, subjects, mood
+### Features
+- **Paste rich text** — HTML is converted to clean Markdown via Turndown.js
+- **Front matter form** — fill in title, status, date, excerpt, categories, tags, featured image
+- **Auto-slug generation** — Slovak/Czech diacritics are transliterated (á→a, č→c, š→s, etc.)
+- **Slug collision detection** — warns if a `blog/{slug}.md` file already exists
+- **Category/tag autocomplete** — shows existing values from blog posts as clickable chips + hardcoded defaults (PPC, SEO, Pharma, Rx, HCP, AI, OTC, Employer Branding)
+- **AI-powered "Analyze Article"** — single-click analysis using Gemini 2.5 Flash-Lite that auto-fills: SEO meta title (60 chars), meta description (155 chars), slug, featured image prompt + SEO filename, and 2 body image prompts with target sections
+- **Featured image generation** — generates images via Gemini 3 Pro Image (Nano Banana Pro) with preview, SEO filename, and auto-set `featured_image` path
+- **Body image generation & drag-drop** — generate section images from AI-suggested or custom prompts, drag thumbnails into drop zones in the preview to insert markdown image references
+- **SEO meta fields** — `custom_fields: meta_title` and `meta_description` in YAML front matter with character counters
+- **Save to disk** — writes directly to `blog/{slug}.md`
+- **Copy to clipboard** — copies the full Markdown output
+- **Heading hierarchy fix** — H1 headings in pasted content are automatically demoted to H2
+- **Czech/Slovak typography cleanup** — normalizes typographic quotes, dashes, non-breaking spaces
 
 ### Architecture
-- `_converter/lib/gemini.py` — Gemini API client with retry logic
-- `_converter/lib/images.py` — image processing (resize, format conversion)
-- `_converter/generate_images.py` — CLI tool for per-article image generation (supports `-n` for SEO filenames)
-- `_converter/batch_generate.sh` — batch runner for featured images (sequential)
-- `_converter/batch_body_images.sh` — batch runner for body images (parallel, 4 workers)
+- `_converter/web/server.js` — Express API (port 3001): blog file listing, categories/tags extraction, article analysis (Gemini), image generation (Gemini), image serving, file saving
+- `_converter/web/src/App.jsx` — React UI: 3-column layout (paste, form, preview) with drag-and-drop image insertion
+- `_converter/web/src/lib/api.js` — Client-side fetch wrappers for AI endpoints (`analyzeArticle`, `generateImage`)
+- `_converter/web/src/lib/slug.js` — SK/CZ-aware slug generation
+- `_converter/web/src/lib/frontmatter.js` — YAML front matter builder (includes `custom_fields` for SEO meta)
+- `_converter/web/src/lib/cleanup.js` — Markdown post-processing pipeline
+- `_converter/web/src/lib/turndown-config.js` — Configured Turndown instance with GFM support
+
+## AI Image Generation (Integrated in Web App)
+
+Image generation is fully integrated into the web converter app. No separate CLI tools or Python scripts needed.
+
+### Setup
+- **API key**: Set `GEMINI_API_KEY` in `.env` file at repo root (gitignored)
+- **Models**:
+  - Text analysis: `gemini-2.5-flash-lite` (cheap, $0.10/$0.40 per 1M tokens)
+  - Image generation: `gemini-3-pro-image-preview` (Nano Banana Pro — uses internal "Thinking" for high-fidelity output)
+
+### Workflow
+
+1. Paste article content into the web app
+2. Click **"Analyze Article"** — AI returns: SEO meta title/description, slug, 1 featured image prompt, 2 body image prompts with target sections
+3. Review and edit any AI-suggested values
+4. Click **"Generate"** on each image prompt — Gemini 3 Pro creates the image
+5. Featured image is auto-set in front matter; body images are dragged into drop zones in the preview
+
+### Image Processing
+- Images are processed via `sharp`: max 1600px width, JPEG quality 85
+- Saved to `_images/{slug}/{seo-filename}.jpg`
+- Alt text (max 125 chars) and title (max 200 chars) are auto-generated from the prompt
+- SEO filenames are auto-generated from prompts (lowercase, hyphens, 3-5 keywords)
+
+### API Endpoints (server.js)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/analyze-article` | AI analysis → meta, slug, image prompts |
+| `POST` | `/api/generate-image` | Generate image via Gemini 3 Pro, save to disk |
+| `GET` | `/api/images/:slug/:filename` | Serve generated images for preview |
+| `GET` | `/api/blog-files` | List existing .md files |
+| `GET` | `/api/categories` | Extract categories/tags from blog posts |
+| `POST` | `/api/save` | Save markdown to `blog/{slug}.md` |
 
 ## Template
 
