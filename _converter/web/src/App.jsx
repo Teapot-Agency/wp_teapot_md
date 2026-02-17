@@ -104,7 +104,7 @@ function TranslateView() {
   useEffect(() => {
     fetch('/api/blog-files')
       .then((r) => r.json())
-      .then((data) => setFiles(data.filter((f) => f !== 'index.md')))
+      .then((data) => setFiles(data.filter((f) => f.slug !== 'index')))
       .catch(() => setFiles([]));
 
     // Fetch initial DeepL usage
@@ -228,10 +228,13 @@ function TranslateView() {
         >
           <option value="">-- Select an article --</option>
           {files.map((f) => {
-            const s = f.replace(/\.md$/, '');
+            const dateStr = f.modified
+              ? new Date(f.modified).toLocaleDateString('sk-SK', { day: '2-digit', month: '2-digit' })
+              : '';
+            const langs = f.languages?.length ? ` [${f.languages.join(',')}]` : '';
             return (
-              <option key={s} value={s}>
-                {f}
+              <option key={f.slug} value={f.slug}>
+                {dateStr} | {f.title}{langs}
               </option>
             );
           })}
@@ -1101,12 +1104,16 @@ function App() {
               >
                 <option value="">Load existing article...</option>
                 {existingFiles
-                  .filter((f) => f !== 'index.md')
+                  .filter((f) => f.slug !== 'index')
                   .map((f) => {
-                    const s = f.replace(/\.md$/, '');
+                    const dateStr = f.modified
+                      ? new Date(f.modified).toLocaleDateString('sk-SK', { day: '2-digit', month: '2-digit' })
+                      : '';
+                    const langs = f.languages?.length ? ` [${f.languages.join(',')}]` : '';
+                    const statusIcon = f.status === 'publish' ? '' : ' (draft)';
                     return (
-                      <option key={s} value={s}>
-                        {f}
+                      <option key={f.slug} value={f.slug}>
+                        {dateStr} | {f.title}{statusIcon}{langs}
                       </option>
                     );
                   })}
@@ -1201,7 +1208,7 @@ function App() {
                       </button>
                     )}
                   </div>
-                  {existingFiles.includes(slug + '.md') && (
+                  {existingFiles.some(f => f.slug === slug) && (
                     <span className="warning">Slug already exists!</span>
                   )}
 

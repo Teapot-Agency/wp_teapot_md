@@ -157,11 +157,67 @@ async function processAndSaveImage(imageBuffer, outputPath) {
 // Existing endpoints
 // ---------------------------------------------------------------------------
 
-// GET /api/blog-files — list .md filenames in blog/
+// GET /api/blog-files — list blog .md files with metadata, sorted by modification date (newest first)
 app.get('/api/blog-files', (req, res) => {
   try {
-    const files = fs.readdirSync(blogDir)
-      .filter(f => f.endsWith('.md'));
+    const filenames = fs.readdirSync(blogDir).filter(f => f.endsWith('.md'));
+    const langDirs = ['en', 'cs', 'sk', 'de', 'fr', 'es', 'pl', 'hu'];
+
+    const files = filenames.map(filename => {
+      const slug = filename.replace(/\.md$/, '');
+      const filePath = path.join(blogDir, filename);
+      const stat = fs.statSync(filePath);
+
+      // Extract front matter fields
+      let title = slug;
+      let postStatus = '';
+      let postDate = '';
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const fm = fmMatch[1];
+          const titleMatch = fm.match(/^title:\s*(.+)$/m);
+          if (titleMatch) {
+            let t = titleMatch[1].trim();
+            if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+              t = t.slice(1, -1);
+            }
+            title = t;
+          }
+          const statusMatch = fm.match(/^post_status:\s*(.+)$/m);
+          if (statusMatch) postStatus = statusMatch[1].trim();
+          const dateMatch = fm.match(/^post_date:\s*(.+)$/m);
+          if (dateMatch) {
+            let d = dateMatch[1].trim();
+            if ((d.startsWith('"') && d.endsWith('"')) || (d.startsWith("'") && d.endsWith("'"))) {
+              d = d.slice(1, -1);
+            }
+            postDate = d;
+          }
+        }
+      } catch { /* ignore read errors for individual files */ }
+
+      // Check which translation subdirectories have this slug
+      const languages = langDirs.filter(lang => {
+        const langFile = path.join(blogDir, lang, `${slug}.md`);
+        return fs.existsSync(langFile);
+      });
+
+      return {
+        filename,
+        slug,
+        title,
+        status: postStatus,
+        postDate,
+        modified: stat.mtime.toISOString(),
+        languages,
+      };
+    });
+
+    // Sort by file modification date, newest first
+    files.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+
     res.json(files);
   } catch (err) {
     console.error('Error reading blog directory:', err.message);
