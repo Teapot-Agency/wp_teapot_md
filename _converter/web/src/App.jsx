@@ -437,6 +437,9 @@ function App() {
   // Tab state
   const [activeTab, setActiveTab] = useState('converter');
 
+  // Sub-tab state for left panel
+  const [activeSubTab, setActiveSubTab] = useState('content');
+
   // Existing state
   const [html, setHtml] = useState('');
   const [markdown, setMarkdown] = useState('');
@@ -464,6 +467,11 @@ function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [suggestedBodyImages, setSuggestedBodyImages] = useState([]);
 
+  // Language quality check state
+  const [languageCorrections, setLanguageCorrections] = useState([]);
+  const [detectedLanguage, setDetectedLanguage] = useState('');
+  const [langCheckOpen, setLangCheckOpen] = useState(false);
+
   // New state: Featured image generation
   const [featuredPrompt, setFeaturedPrompt] = useState('');
   const [featuredSeoName, setFeaturedSeoName] = useState('');
@@ -478,12 +486,6 @@ function App() {
   const [bodyImageSeoManual, setBodyImageSeoManual] = useState(false);
   const [bodyImageLoading, setBodyImageLoading] = useState(false);
   const [draggedImage, setDraggedImage] = useState(null);
-
-  // Collapsible section states
-  const [seoOpen, setSeoOpen] = useState(false);
-  const [catTagsOpen, setCatTagsOpen] = useState(false);
-  const [featuredOpen, setFeaturedOpen] = useState(false);
-  const [bodyImagesOpen, setBodyImagesOpen] = useState(false);
 
   const pasteRef = useRef(null);
   const featuredPreviewRef = useRef(null);
@@ -779,10 +781,10 @@ function App() {
     setBodyImageSeoManual(false);
     setBodyImageLoading(false);
     setDraggedImage(null);
-    setSeoOpen(false);
-    setCatTagsOpen(false);
-    setFeaturedOpen(false);
-    setBodyImagesOpen(false);
+    setLanguageCorrections([]);
+    setDetectedLanguage('');
+    setLangCheckOpen(false);
+    setActiveSubTab('content');
     if (pasteRef.current) {
       pasteRef.current.innerHTML = '';
     }
@@ -832,7 +834,6 @@ function App() {
       const result = await analyzeArticle(title, markdown);
       setMetaTitle(result.metaTitle || '');
       setMetaDescription(result.metaDescription || '');
-      setSeoOpen(true);
       if (result.slug) {
         setSlug(result.slug);
         setSlugManual(true);
@@ -843,17 +844,55 @@ function App() {
           setFeaturedSeoName(result.featuredImage.seoFilename);
           setFeaturedSeoManual(true);
         }
-        setFeaturedOpen(true);
       }
       if (result.bodyImages && result.bodyImages.length > 0) {
         setSuggestedBodyImages(result.bodyImages);
-        setBodyImagesOpen(true);
       }
+      // Language quality corrections
+      if (result.languageCorrections?.length > 0) {
+        setLanguageCorrections(result.languageCorrections);
+        setLangCheckOpen(true);
+      } else {
+        setLanguageCorrections([]);
+      }
+      setDetectedLanguage(result.detectedLanguage || '');
+      // Switch to SEO & Media tab to show results
+      setActiveSubTab('seo');
     } catch (err) {
       alert('Article analysis failed: ' + err.message);
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  // Accept a single language correction
+  const handleAcceptCorrection = (index) => {
+    const correction = languageCorrections[index];
+    setMarkdown(prev => prev.replaceAll(correction.original, correction.suggested));
+    if (title.includes(correction.original)) {
+      setTitle(prev => prev.replaceAll(correction.original, correction.suggested));
+    }
+    setLanguageCorrections(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Dismiss a single correction
+  const handleDismissCorrection = (index) => {
+    setLanguageCorrections(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Accept all remaining corrections
+  const handleAcceptAllCorrections = () => {
+    let updatedMarkdown = markdown;
+    let updatedTitle = title;
+    for (const correction of languageCorrections) {
+      updatedMarkdown = updatedMarkdown.replaceAll(correction.original, correction.suggested);
+      if (updatedTitle.includes(correction.original)) {
+        updatedTitle = updatedTitle.replaceAll(correction.original, correction.suggested);
+      }
+    }
+    setMarkdown(updatedMarkdown);
+    setTitle(updatedTitle);
+    setLanguageCorrections([]);
   };
 
   // Generate featured image
@@ -949,453 +988,505 @@ function App() {
 
       {activeTab === 'translate' && <TranslateView />}
 
-      {activeTab === 'converter' && <><div className="main-layout">
-        {/* Left column: paste area */}
-        <div className="column paste-column">
-          <h2>Paste Rich Text</h2>
-          <div
-            className="paste-area"
-            contentEditable
-            onPaste={handlePaste}
-            onInput={handleInput}
-            ref={pasteRef}
-            data-placeholder="Paste rich text here..."
-          />
-          <button onClick={handleClearPaste} className="btn btn-secondary">
-            Clear
-          </button>
-        </div>
-
-        {/* Center column: front matter form */}
-        <div className="column form-column">
-          <h2>Front Matter</h2>
-
-          <label>Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Post title"
-          />
-
-          <button
-            className="btn-analyze"
-            onClick={handleAnalyze}
-            disabled={!title || !markdown || analyzing}
-          >
-            {analyzing ? (
-              <>
-                <span className="spinner" />
-                Analyzing...
-              </>
-            ) : (
-              'Analyze Article'
-            )}
-          </button>
-          <span className="hint">Fills slug, SEO meta, and image prompts</span>
-
-          <label>Slug</label>
-          <div className="slug-row">
-            <input
-              type="text"
-              value={slug}
-              onChange={(e) => {
-                setSlug(e.target.value);
-                setSlugManual(true);
-              }}
-              placeholder="post-slug"
-            />
-            {slugManual && (
+      {activeTab === 'converter' && (
+        <div className="two-col-layout">
+          {/* ===== LEFT COLUMN: Editor with sub-tabs ===== */}
+          <div className="editor-column">
+            <div className="sub-tab-nav">
               <button
-                onClick={() => {
-                  setSlugManual(false);
-                  setSlug(generateSlug(title));
-                }}
-                className="btn-tiny"
+                className={activeSubTab === 'content' ? 'active' : ''}
+                onClick={() => setActiveSubTab('content')}
               >
-                Auto
+                Content
               </button>
-            )}
-          </div>
-          {existingFiles.includes(slug + '.md') && (
-            <span className="warning">Slug already exists!</span>
-          )}
-
-          <label>Status</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="draft">Draft</option>
-            <option value="publish">Publish</option>
-            <option value="pending">Pending</option>
-          </select>
-
-          <label>Date</label>
-          <input
-            type="datetime-local"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-
-          <label>Excerpt</label>
-          <textarea
-            value={excerpt}
-            onChange={(e) => setExcerpt(e.target.value)}
-            rows={3}
-            placeholder="Short description..."
-          />
-
-          {/* SEO Meta Fields */}
-          <details className="collapsible" open={seoOpen} onToggle={(e) => setSeoOpen(e.currentTarget.open)}>
-            <summary>SEO Meta Fields</summary>
-            <div className="collapsible-content">
-              <label>
-                SEO Meta Title{' '}
-                <span className={`char-counter-textarea ${metaTitle.length > 60 ? 'over' : ''}`}>
-                  {metaTitle.length}/60
-                </span>
-              </label>
-              <div className="field-with-counter">
-                <input
-                  type="text"
-                  value={metaTitle}
-                  onChange={(e) => setMetaTitle(e.target.value)}
-                  placeholder="SEO title (max 60 chars)"
-                />
-              </div>
-
-              <label>
-                SEO Meta Description{' '}
-                <span className={`char-counter-textarea ${metaDescription.length > 155 ? 'over' : ''}`}>
-                  {metaDescription.length}/155
-                </span>
-              </label>
-              <textarea
-                value={metaDescription}
-                onChange={(e) => setMetaDescription(e.target.value)}
-                rows={3}
-                placeholder="Meta description (max 155 chars)"
-              />
-            </div>
-          </details>
-
-          <details className="collapsible" open={catTagsOpen} onToggle={(e) => setCatTagsOpen(e.currentTarget.open)}>
-            <summary>Categories & Tags</summary>
-            <div className="collapsible-content two-col-row">
-              <div>
-                <label>
-                  Categories <span className="hint">(comma-separated)</span>
-                </label>
-                <input
-                  type="text"
-                  value={categories}
-                  onChange={(e) => setCategories(e.target.value)}
-                  placeholder="pharma, digital-health"
-                />
-                {allCategories.length > 0 && (
-                  <div className="suggestions">
-                    {allCategories.map((c) => (
-                      <button key={c.slug} className="chip" onClick={() => addCategory(c.slug)}>
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
+              <button
+                className={activeSubTab === 'seo' ? 'active' : ''}
+                onClick={() => setActiveSubTab('seo')}
+              >
+                SEO & Media
+                {languageCorrections.length > 0 && (
+                  <span className="sub-tab-badge">{languageCorrections.length}</span>
                 )}
-              </div>
-              <div>
-                <label>
-                  Tags <span className="hint">(comma-separated)</span>
-                </label>
-                <input
-                  type="text"
-                  value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="ai, marketing"
-                />
-                {existingTags.length > 0 && (
-                  <div className="suggestions">
-                    {existingTags.map((t) => (
-                      <button key={t} className="chip" onClick={() => addTag(t)}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              </button>
             </div>
-          </details>
 
-          {/* Featured Image Panel */}
-          <details className="collapsible" open={featuredOpen} onToggle={(e) => setFeaturedOpen(e.currentTarget.open)}>
-            <summary>Featured Image</summary>
-            <div className="collapsible-content">
-              <label>Image Prompt</label>
-              <input
-                type="text"
-                value={featuredPrompt}
-                onChange={(e) => setFeaturedPrompt(e.target.value)}
-                placeholder="Describe the image to generate..."
-              />
-
-              <label>SEO Filename</label>
-              <div className="slug-row">
-                <input
-                  type="text"
-                  value={featuredSeoName}
-                  onChange={(e) => {
-                    setFeaturedSeoName(e.target.value);
-                    setFeaturedSeoManual(true);
-                  }}
-                  placeholder="seo-friendly-filename"
-                />
-                {featuredSeoManual && (
-                  <button
-                    onClick={() => {
-                      setFeaturedSeoManual(false);
-                      setFeaturedSeoName(promptToFilename(featuredPrompt));
-                    }}
-                    className="btn-tiny"
-                  >
-                    Auto
+            <div className="editor-panel">
+              {/* ---- Content sub-tab ---- */}
+              {activeSubTab === 'content' && (
+                <div className="sub-tab-content">
+                  <h2>Paste Rich Text</h2>
+                  <div
+                    className="paste-area"
+                    contentEditable
+                    onPaste={handlePaste}
+                    onInput={handleInput}
+                    ref={pasteRef}
+                    data-placeholder="Paste rich text here..."
+                  />
+                  <button onClick={handleClearPaste} className="btn btn-secondary btn-sm">
+                    Clear
                   </button>
-                )}
-              </div>
 
-              {slug && featuredSeoName && (
-                <div className="featured-path">
-                  _images/{slug}/{featuredSeoName}.jpg
-                </div>
-              )}
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Post title"
+                  />
 
-              {featuredImageLoading ? (
-                <div className="loading-text">
-                  <span className="spinner" />
-                  Generating... (15-30s)
-                </div>
-              ) : (
-                <button
-                  className="btn-generate"
-                  onClick={handleGenerateFeaturedImage}
-                  disabled={!slug || !featuredPrompt || featuredImageLoading}
-                >
-                  {featuredPreview ? 'Regenerate Image' : 'Generate Image'}
-                </button>
-              )}
-
-              {featuredPreview && (
-                <div className="featured-preview-compact" ref={featuredPreviewRef}>
-                  <a href={featuredPreview} target="_blank" rel="noopener noreferrer">
-                    <img src={featuredPreview} alt="Featured image preview" />
-                  </a>
-                  <div className="featured-info">
-                    <div className="featured-preview-label">Blog header / hero image</div>
-                    {featuredImage && (
-                      <div className="featured-path">{featuredImage}</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </details>
-        </div>
-
-        {/* Right column: body images + preview */}
-        <div className="column preview-column">
-          <h2>Output Preview</h2>
-
-          {/* Body Image Toolbar */}
-          <details className="collapsible" open={bodyImagesOpen} onToggle={(e) => setBodyImagesOpen(e.currentTarget.open)}>
-            <summary>Body Images</summary>
-            <div className="collapsible-content">
-
-            {/* Suggested image cards from Analyze */}
-            {suggestedBodyImages.length > 0 && (
-              <div className="suggested-images">
-                {suggestedBodyImages.map((suggestion, idx) => (
-                  <div key={idx} className={`suggested-image-card ${suggestion.generated ? 'generated' : ''}`}>
-                    <div className="suggested-section">After: {suggestion.afterSection}</div>
-                    {suggestion.generated ? (
+                  <button
+                    className="btn-analyze"
+                    onClick={handleAnalyze}
+                    disabled={!title || !markdown || analyzing}
+                  >
+                    {analyzing ? (
                       <>
-                        <div className="suggested-prompt">{suggestion.prompt}</div>
-                        <span className="suggested-done">Generated</span>
+                        <span className="spinner" />
+                        Analyzing...
                       </>
                     ) : (
-                      <>
-                        <label className="suggested-label">Prompt</label>
-                        <textarea
-                          className="suggested-input"
-                          value={suggestion.prompt}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSuggestedBodyImages(prev =>
-                              prev.map((s, i) => i === idx ? { ...s, prompt: val } : s)
-                            );
-                          }}
-                          rows={2}
-                        />
-                        <label className="suggested-label">SEO Filename</label>
+                      'Analyze Article'
+                    )}
+                  </button>
+                  <span className="hint">Fills slug, SEO meta, image prompts, and language check</span>
+
+                  <label>Slug</label>
+                  <div className="slug-row">
+                    <input
+                      type="text"
+                      value={slug}
+                      onChange={(e) => {
+                        setSlug(e.target.value);
+                        setSlugManual(true);
+                      }}
+                      placeholder="post-slug"
+                    />
+                    {slugManual && (
+                      <button
+                        onClick={() => {
+                          setSlugManual(false);
+                          setSlug(generateSlug(title));
+                        }}
+                        className="btn-tiny"
+                      >
+                        Auto
+                      </button>
+                    )}
+                  </div>
+                  {existingFiles.includes(slug + '.md') && (
+                    <span className="warning">Slug already exists!</span>
+                  )}
+
+                  <div className="inline-row">
+                    <div className="inline-field">
+                      <label>Status</label>
+                      <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                        <option value="draft">Draft</option>
+                        <option value="publish">Publish</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+                    <div className="inline-field">
+                      <label>Date</label>
+                      <input
+                        type="datetime-local"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <label>Excerpt</label>
+                  <textarea
+                    value={excerpt}
+                    onChange={(e) => setExcerpt(e.target.value)}
+                    rows={2}
+                    placeholder="Short description..."
+                  />
+                </div>
+              )}
+
+              {/* ---- SEO & Media sub-tab ---- */}
+              {activeSubTab === 'seo' && (
+                <div className="sub-tab-content">
+                  {/* Language Quality Check */}
+                  {(languageCorrections.length > 0 || detectedLanguage) && (
+                    <details className="collapsible" open={langCheckOpen} onToggle={(e) => setLangCheckOpen(e.currentTarget.open)}>
+                      <summary>
+                        Language Quality
+                        {detectedLanguage && (
+                          <span className="lang-chip-sm">{detectedLanguage.toUpperCase()}</span>
+                        )}
+                        {languageCorrections.length > 0 && (
+                          <span className="correction-count">{languageCorrections.length}</span>
+                        )}
+                      </summary>
+                      <div className="collapsible-content">
+                        {languageCorrections.length === 0 ? (
+                          <div className="lang-check-ok">No issues found.</div>
+                        ) : (
+                          <>
+                            {languageCorrections.map((c, idx) => (
+                              <div key={idx} className="correction-card">
+                                <div className="correction-type">{c.type}</div>
+                                <div className="correction-original">{c.original}</div>
+                                <div className="correction-arrow">&darr;</div>
+                                <div className="correction-suggested">{c.suggested}</div>
+                                <div className="correction-reason">{c.reason}</div>
+                                <div className="correction-actions">
+                                  <button className="btn-tiny correction-accept" onClick={() => handleAcceptCorrection(idx)}>Accept</button>
+                                  <button className="btn-tiny" onClick={() => handleDismissCorrection(idx)}>Dismiss</button>
+                                </div>
+                              </div>
+                            ))}
+                            <button className="btn-tiny correction-accept-all" onClick={handleAcceptAllCorrections}>
+                              Accept All ({languageCorrections.length})
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </details>
+                  )}
+
+                  {/* SEO Meta Fields */}
+                  <h3>SEO Meta Fields</h3>
+                  <label>
+                    SEO Meta Title{' '}
+                    <span className={`char-counter-textarea ${metaTitle.length > 60 ? 'over' : ''}`}>
+                      {metaTitle.length}/60
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={metaTitle}
+                    onChange={(e) => setMetaTitle(e.target.value)}
+                    placeholder="SEO title (max 60 chars)"
+                  />
+
+                  <label>
+                    SEO Meta Description{' '}
+                    <span className={`char-counter-textarea ${metaDescription.length > 155 ? 'over' : ''}`}>
+                      {metaDescription.length}/155
+                    </span>
+                  </label>
+                  <textarea
+                    value={metaDescription}
+                    onChange={(e) => setMetaDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Meta description (max 155 chars)"
+                  />
+
+                  {/* Categories & Tags */}
+                  <h3>Categories & Tags</h3>
+                  <div className="two-col-row">
+                    <div>
+                      <label>
+                        Categories <span className="hint">(comma-separated)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={categories}
+                        onChange={(e) => setCategories(e.target.value)}
+                        placeholder="pharma, digital-health"
+                      />
+                      {allCategories.length > 0 && (
+                        <div className="suggestions">
+                          {allCategories.map((c) => (
+                            <button key={c.slug} className="chip" onClick={() => addCategory(c.slug)}>
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label>
+                        Tags <span className="hint">(comma-separated)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={tags}
+                        onChange={(e) => setTags(e.target.value)}
+                        placeholder="ai, marketing"
+                      />
+                      {existingTags.length > 0 && (
+                        <div className="suggestions">
+                          {existingTags.map((t) => (
+                            <button key={t} className="chip" onClick={() => addTag(t)}>
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Featured Image */}
+                  <h3>Featured Image</h3>
+                  <label>Image Prompt</label>
+                  <input
+                    type="text"
+                    value={featuredPrompt}
+                    onChange={(e) => setFeaturedPrompt(e.target.value)}
+                    placeholder="Describe the image to generate..."
+                  />
+
+                  <label>SEO Filename</label>
+                  <div className="slug-row">
+                    <input
+                      type="text"
+                      value={featuredSeoName}
+                      onChange={(e) => {
+                        setFeaturedSeoName(e.target.value);
+                        setFeaturedSeoManual(true);
+                      }}
+                      placeholder="seo-friendly-filename"
+                    />
+                    {featuredSeoManual && (
+                      <button
+                        onClick={() => {
+                          setFeaturedSeoManual(false);
+                          setFeaturedSeoName(promptToFilename(featuredPrompt));
+                        }}
+                        className="btn-tiny"
+                      >
+                        Auto
+                      </button>
+                    )}
+                  </div>
+
+                  {slug && featuredSeoName && (
+                    <div className="featured-path">
+                      _images/{slug}/{featuredSeoName}.jpg
+                    </div>
+                  )}
+
+                  {featuredImageLoading ? (
+                    <div className="loading-text">
+                      <span className="spinner" />
+                      Generating... (15-30s)
+                    </div>
+                  ) : (
+                    <button
+                      className="btn-generate"
+                      onClick={handleGenerateFeaturedImage}
+                      disabled={!slug || !featuredPrompt || featuredImageLoading}
+                    >
+                      {featuredPreview ? 'Regenerate Image' : 'Generate Image'}
+                    </button>
+                  )}
+
+                  {featuredPreview && (
+                    <div className="featured-preview-compact" ref={featuredPreviewRef}>
+                      <a href={featuredPreview} target="_blank" rel="noopener noreferrer">
+                        <img src={featuredPreview} alt="Featured image preview" />
+                      </a>
+                      <div className="featured-info">
+                        <div className="featured-preview-label">Blog header / hero image</div>
+                        {featuredImage && (
+                          <div className="featured-path">{featuredImage}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Body Images */}
+                  <h3>Body Images</h3>
+
+                  {/* Suggested image cards from Analyze */}
+                  {suggestedBodyImages.length > 0 && (
+                    <div className="suggested-images">
+                      {suggestedBodyImages.map((suggestion, idx) => (
+                        <div key={idx} className={`suggested-image-card ${suggestion.generated ? 'generated' : ''}`}>
+                          <div className="suggested-section">After: {suggestion.afterSection}</div>
+                          {suggestion.generated ? (
+                            <>
+                              <div className="suggested-prompt">{suggestion.prompt}</div>
+                              <span className="suggested-done">Generated</span>
+                            </>
+                          ) : (
+                            <>
+                              <label className="suggested-label">Prompt</label>
+                              <textarea
+                                className="suggested-input"
+                                value={suggestion.prompt}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setSuggestedBodyImages(prev =>
+                                    prev.map((s, i) => i === idx ? { ...s, prompt: val } : s)
+                                  );
+                                }}
+                                rows={2}
+                              />
+                              <label className="suggested-label">SEO Filename</label>
+                              <input
+                                className="suggested-input"
+                                type="text"
+                                value={suggestion.seoFilename || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setSuggestedBodyImages(prev =>
+                                    prev.map((s, i) => i === idx ? { ...s, seoFilename: val } : s)
+                                  );
+                                }}
+                                placeholder="seo-friendly-filename"
+                              />
+                              <button
+                                className="btn-generate"
+                                onClick={() => handleGenerateSuggestedImage(suggestion, idx)}
+                                disabled={!slug || suggestion.loading}
+                                style={{ marginTop: '0.3rem' }}
+                              >
+                                {suggestion.loading ? (
+                                  <>
+                                    <span className="spinner" />
+                                    Generating...
+                                  </>
+                                ) : (
+                                  'Generate'
+                                )}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Manual prompt input */}
+                  <label className="suggested-label" style={{ marginTop: '0.5rem' }}>Custom Image Prompt</label>
+                  <div className="prompt-row">
+                    <input
+                      type="text"
+                      value={bodyImagePrompt}
+                      onChange={(e) => setBodyImagePrompt(e.target.value)}
+                      placeholder="Describe a custom body image..."
+                    />
+                  </div>
+                  {bodyImagePrompt && (
+                    <>
+                      <label className="suggested-label">SEO Filename</label>
+                      <div className="slug-row" style={{ marginBottom: '0.3rem' }}>
                         <input
-                          className="suggested-input"
                           type="text"
-                          value={suggestion.seoFilename || ''}
+                          value={bodyImageSeoName}
                           onChange={(e) => {
-                            const val = e.target.value;
-                            setSuggestedBodyImages(prev =>
-                              prev.map((s, i) => i === idx ? { ...s, seoFilename: val } : s)
-                            );
+                            setBodyImageSeoName(e.target.value);
+                            setBodyImageSeoManual(true);
                           }}
                           placeholder="seo-friendly-filename"
                         />
-                        <button
-                          className="btn-generate"
-                          onClick={() => handleGenerateSuggestedImage(suggestion, idx)}
-                          disabled={!slug || suggestion.loading}
-                          style={{ marginTop: '0.3rem' }}
-                        >
-                          {suggestion.loading ? (
-                            <>
-                              <span className="spinner" />
-                              Generating...
-                            </>
-                          ) : (
-                            'Generate'
-                          )}
-                        </button>
+                        {bodyImageSeoManual && (
+                          <button
+                            onClick={() => {
+                              setBodyImageSeoManual(false);
+                              setBodyImageSeoName(promptToFilename(bodyImagePrompt));
+                            }}
+                            className="btn-tiny"
+                          >
+                            Auto
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  <button
+                    className="btn-generate"
+                    onClick={handleGenerateBodyImage}
+                    disabled={!slug || !bodyImagePrompt || bodyImageLoading}
+                    style={{ marginTop: '0.3rem' }}
+                  >
+                    {bodyImageLoading ? (
+                      <>
+                        <span className="spinner" />
+                        Generating...
                       </>
+                    ) : (
+                      'Generate'
                     )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  </button>
 
-            {/* Manual prompt input */}
-            <label className="suggested-label" style={{ marginTop: '0.5rem' }}>Custom Image Prompt</label>
-            <div className="prompt-row">
-              <input
-                type="text"
-                value={bodyImagePrompt}
-                onChange={(e) => setBodyImagePrompt(e.target.value)}
-                placeholder="Describe a custom body image..."
-              />
-            </div>
-            {bodyImagePrompt && (
-              <>
-                <label className="suggested-label">SEO Filename</label>
-                <div className="slug-row" style={{ marginBottom: '0.3rem' }}>
-                  <input
-                    type="text"
-                    value={bodyImageSeoName}
-                    onChange={(e) => {
-                      setBodyImageSeoName(e.target.value);
-                      setBodyImageSeoManual(true);
-                    }}
-                    placeholder="seo-friendly-filename"
-                  />
-                  {bodyImageSeoManual && (
-                    <button
-                      onClick={() => {
-                        setBodyImageSeoManual(false);
-                        setBodyImageSeoName(promptToFilename(bodyImagePrompt));
-                      }}
-                      className="btn-tiny"
-                    >
-                      Auto
-                    </button>
+                  {bodyImages.length > 0 && <p className="hint" style={{ marginTop: '0.4rem', marginBottom: '0.2rem' }}>Drag images into the preview to insert them.</p>}
+                  {bodyImages.length > 0 && (
+                    <div className="image-cards">
+                      {bodyImages.map((img) => (
+                        <div
+                          key={img.id}
+                          className="image-card"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData(
+                              'application/json',
+                              JSON.stringify({
+                                alt: img.alt,
+                                mdPath: img.mdPath,
+                                title: img.title,
+                              })
+                            );
+                            setDraggedImage(img);
+                          }}
+                          onDragEnd={() => setDraggedImage(null)}
+                        >
+                          <button
+                            className="image-card-remove"
+                            onClick={() => removeBodyImage(img.id)}
+                          >
+                            &times;
+                          </button>
+                          <img src={img.previewUrl} alt={img.alt || img.seoFilename} />
+                          <div className="image-card-name">{img.filename || img.seoFilename}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </>
-            )}
-            <button
-              className="btn-generate"
-              onClick={handleGenerateBodyImage}
-              disabled={!slug || !bodyImagePrompt || bodyImageLoading}
-              style={{ marginTop: '0.3rem' }}
-            >
-              {bodyImageLoading ? (
-                <>
-                  <span className="spinner" />
-                  Generating...
-                </>
-              ) : (
-                'Generate'
               )}
-            </button>
-
-            {bodyImages.length > 0 && <p className="hint" style={{ marginTop: '0.4rem', marginBottom: '0.2rem' }}>Drag images into the preview below to insert them.</p>}
-            {bodyImages.length > 0 && (
-              <div className="image-cards">
-                {bodyImages.map((img) => (
-                  <div
-                    key={img.id}
-                    className="image-card"
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(
-                        'application/json',
-                        JSON.stringify({
-                          alt: img.alt,
-                          mdPath: img.mdPath,
-                          title: img.title,
-                        })
-                      );
-                      setDraggedImage(img);
-                    }}
-                    onDragEnd={() => setDraggedImage(null)}
-                  >
-                    <button
-                      className="image-card-remove"
-                      onClick={() => removeBodyImage(img.id)}
-                    >
-                      &times;
-                    </button>
-                    <img src={img.previewUrl} alt={img.alt || img.seoFilename} />
-                    <div className="image-card-name">{img.filename || img.seoFilename}</div>
-                  </div>
-                ))}
-              </div>
-            )}
             </div>
-          </details>
+          </div>
 
-          {/* Interactive preview with drop zones */}
-          <div className="preview-scroll">
-            {previewBlocks.map((block, i) => (
-              <div key={i}>
-                <pre className="preview-block">{block.text}</pre>
-                {block.type === 'content' && (
-                  <DropZone
-                    onDrop={(imageData) =>
-                      handleInsertBodyImage(
-                        block.lineIndex + block.text.split('\n').length,
-                        imageData
-                      )
-                    }
-                  />
-                )}
-              </div>
-            ))}
+          {/* ===== RIGHT COLUMN: Preview + Actions ===== */}
+          <div className="preview-column">
+            <h2>Output Preview</h2>
+            <div className="preview-scroll">
+              {previewBlocks.map((block, i) => (
+                <div key={i}>
+                  <pre className="preview-block">{block.text}</pre>
+                  {block.type === 'content' && (
+                    <DropZone
+                      onDrop={(imageData) =>
+                        handleInsertBodyImage(
+                          block.lineIndex + block.text.split('\n').length,
+                          imageData
+                        )
+                      }
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="action-bar">
+              <button
+                onClick={() => handleSave(false)}
+                className="btn btn-primary"
+                disabled={!slug || !markdown || saveStatus === 'saving'}
+              >
+                {saveStatus === 'saving' ? 'Saving...' : 'Save to blog/'}
+              </button>
+              <button onClick={handleCopy} className="btn btn-secondary">
+                {copyFeedback ? 'Copied!' : 'Copy'}
+              </button>
+              <button onClick={handleReset} className="btn btn-secondary">
+                Reset
+              </button>
+              {saveMessage && (
+                <span className={`save-message ${saveStatus}`}>{saveMessage}</span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Bottom action bar */}
-      <div className="action-bar">
-        <button
-          onClick={() => handleSave(false)}
-          className="btn btn-primary"
-          disabled={!slug || !markdown || saveStatus === 'saving'}
-        >
-          {saveStatus === 'saving' ? 'Saving...' : 'Save to blog/'}
-        </button>
-        <button onClick={handleCopy} className="btn btn-secondary">
-          {copyFeedback ? 'Copied!' : 'Copy to Clipboard'}
-        </button>
-        <button onClick={handleReset} className="btn btn-secondary">
-          Reset
-        </button>
-        {saveMessage && (
-          <span className={`save-message ${saveStatus}`}>{saveMessage}</span>
-        )}
-      </div>
-      </>}
+      )}
     </div>
   );
 }
