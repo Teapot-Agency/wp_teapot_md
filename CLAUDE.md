@@ -118,6 +118,65 @@ Use **relative links** to other `.md` files - the plugin converts them to proper
 - WordPress shortcodes work as-is: `[shortcode_name attr="value"]`
 - The `[giw_edit_link]` shortcode adds a "Edit this page" GitHub link
 
+## SEO Optimization Guidelines (Title & Meta Description)
+
+When creating or optimizing post titles and meta descriptions, follow these **2026 SEO standards** to maximize CTR and search visibility.
+
+### Title Tag (`title` in front matter)
+
+**Length:** 50–60 characters (strict hard limit 60)
+**Visual Limit:** Must not exceed 580px width (avoid excessive wide caps like 'W', 'M')
+**Structure:** `[Primary Keyword] + [Hook/Benefit] + [Optional: Brand]`
+
+**Best Practices:**
+- **Front-load the primary keyword** (first 2 words)
+- Use brackets for CTR boosts: `[2026 Update]`, `(Free Guide)`, `[Proven]`
+- Use power words: Best, Guide, Fast, Proven, Ultimate, Complete, Essential
+- **NO** clickbait that doesn't deliver on the content
+- Match user intent: Informational = educational tone; Transactional = urgent/sales tone
+
+**Example (Pharma/Healthcare context):**
+- Good: `FDA Compliance for DTC Rx Ads [2026 Guide]`
+- Good: `Best AI Tools for Pharma Marketing Teams`
+- Bad: `Everything You Need to Know About FDA Compliance` (too generic, keyword not front-loaded)
+
+### Meta Description (`custom_fields: meta_description` in front matter)
+
+**Length:** 130–155 characters (strict hard limit 160)
+**Visual Limit:** Must not exceed 920px width
+**Structure:** `[Hook/Problem] + [Solution/Benefit with Keyword] + [Call to Action]`
+
+**Best Practices:**
+- **Use active voice** (e.g., "Discover," "Learn," "Get")
+- **Include the primary keyword naturally** (it gets bolded in SERPs)
+- **NO** passive voice (e.g., "The guide is written by...")
+- **NO** quotation marks (`" "`) as they can break HTML rendering
+- Match tone to user intent (see Title Tag guidelines)
+
+**Example (Pharma/Healthcare context):**
+- Good: `Learn FDA compliance requirements for DTC Rx advertising in 2026. Avoid costly violations with our expert guide. Download now.`
+- Good: `Discover AI-powered tools to optimize pharma campaigns. Boost HCP engagement and ROI. Get the complete list.`
+- Bad: `This article discusses FDA compliance issues that pharmaceutical marketers should be aware of.` (passive, no CTA)
+
+### WordPress SEO Fields Mapping
+
+| Front Matter Field | WordPress Function | SEO Impact |
+|-------------------|-------------------|-----------|
+| `title` | Post title (H1) + default title tag | Primary ranking signal |
+| `custom_fields: meta_title` | Overrides default title tag | Use when title needs SEO optimization beyond H1 |
+| `custom_fields: meta_description` | Meta description tag | CTR optimization, SERP snippet |
+| `post_excerpt` | Excerpt (fallback meta description) | Use `meta_description` for SEO control |
+
+**When to use `meta_title` vs `title`:**
+- Use `title` for the visible H1 heading (can be longer, more natural)
+- Use `custom_fields: meta_title` when SEO title needs to be different (keyword-optimized, shorter)
+- If `meta_title` is not set, WordPress uses `title` for the title tag
+
+### Uniqueness & Duplication
+- **Never duplicate** title tags or meta descriptions across posts
+- Each post needs unique, targeted SEO metadata
+- Check existing posts to avoid keyword cannibalization
+
 ## Step-by-Step: Creating a New Post
 
 1. **Determine location**: Where in the folder hierarchy does this post belong?
