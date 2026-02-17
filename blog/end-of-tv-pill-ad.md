@@ -5,7 +5,7 @@ post_date: 2025-10-21 09:00:00
 post_excerpt: "The passive patient is dead and so is the TV pill ad. Explore 5 major shifts redefining OTC and supplement marketing in 2026, from creator-led content to AI personalization."
 taxonomy:
     category:
-        - supplements
+        - Supplements
     post_tag:
         - otc-marketing
         - supplement-market

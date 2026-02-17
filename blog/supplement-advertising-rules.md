@@ -5,7 +5,7 @@ post_date: 2025-08-12 09:00:00
 post_excerpt: "The supplement industry faces a $100 billion trust crisis. Discover 6 counter-intuitive advertising rules that separate winning brands from the noise in 2025."
 taxonomy:
     category:
-        - supplements
+        - Supplements
     post_tag:
         - supplement-advertising
         - brand-trust

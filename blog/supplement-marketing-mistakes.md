@@ -5,7 +5,7 @@ post_date: 2025-09-16 09:00:00
 post_excerpt: "Avoid the costliest supplement marketing mistakes of 2025. From FTC crackdowns to ingredient quality paradoxes, learn what separates thriving brands from failing ones."
 taxonomy:
     category:
-        - supplements
+        - Supplements
     post_tag:
         - supplement-marketing
         - marketing-mistakes

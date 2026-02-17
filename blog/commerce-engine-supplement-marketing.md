@@ -5,7 +5,7 @@ post_date: 2025-07-08 09:00:00
 post_excerpt: "Vibe-based supplement marketing is dead. Learn how top wellness brands are building performance-driven commerce engines with AI, clinical proof, and owned communities."
 taxonomy:
     category:
-        - supplements
+        - Supplements
     post_tag:
         - supplement-marketing
         - ecommerce-strategy
