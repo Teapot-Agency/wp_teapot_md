@@ -215,6 +215,28 @@ app.get('/api/categories', (req, res) => {
   }
 });
 
+// GET /api/blog-files/:slug — read a single blog .md file content
+app.get('/api/blog-files/:slug', (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return res.status(400).json({ error: 'Invalid slug format' });
+    }
+
+    const filePath = path.join(blogDir, `${slug}.md`);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: `File ${slug}.md not found` });
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.json({ slug, content });
+  } catch (err) {
+    console.error('Error reading blog file:', err.message);
+    res.status(500).json({ error: 'Failed to read blog file' });
+  }
+});
+
 // POST /api/save — save markdown content to blog/{slug}.md
 app.post('/api/save', (req, res) => {
   try {

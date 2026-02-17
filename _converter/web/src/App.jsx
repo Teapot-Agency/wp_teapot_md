@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import htmlToMarkdown from './lib/turndown-config';
 import { cleanupMarkdown } from './lib/cleanup';
 import { generateSlug } from './lib/slug';
-import { buildFrontmatter } from './lib/frontmatter';
-import { analyzeArticle, generateImage, getTranslationStatus, estimateTranslation, translateArticle, saveTranslation, getDeeplUsage } from './lib/api';
+import { buildFrontmatter, parseFrontmatter } from './lib/frontmatter';
+import { analyzeArticle, generateImage, loadArticle, getTranslationStatus, estimateTranslation, translateArticle, saveTranslation, getDeeplUsage } from './lib/api';
 import './App.css';
 
 const DEFAULT_CATEGORIES = [
@@ -489,6 +489,10 @@ function App() {
   const [draggedImage, setDraggedImage] = useState(null);
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
+  // Load article state
+  const [loadSlug, setLoadSlug] = useState('');
+  const [loadingArticle, setLoadingArticle] = useState(false);
+
   const pasteRef = useRef(null);
   const featuredPreviewRef = useRef(null);
 
@@ -699,6 +703,23 @@ function App() {
     setMarkdown(mdLines.join('\n'));
   };
 
+  // Insert image markdown before a heading that matches the given text
+  const insertImageBeforeHeading = (currentMarkdown, headingText, imageData) => {
+    const mdLines = currentMarkdown.split('\n');
+    const target = headingText.trim().toLowerCase();
+    let targetIndex = -1;
+    for (let i = 0; i < mdLines.length; i++) {
+      const match = mdLines[i].match(/^#{1,6}\s+(.+)$/);
+      if (match && match[1].trim().toLowerCase() === target) {
+        targetIndex = i;
+        break;
+      }
+    }
+    if (targetIndex === -1) return null;
+    mdLines.splice(targetIndex, 0, '', `![${imageData.alt}](${imageData.mdPath} "${imageData.title}")`, '');
+    return mdLines.join('\n');
+  };
+
   // Save handler
   const handleSave = async (overwrite = false) => {
     setSaveStatus('saving');
@@ -804,6 +825,71 @@ function App() {
     }
     setHtml('');
     setMarkdown('');
+  };
+
+  // Load an existing article for editing
+  const handleLoadArticle = async () => {
+    if (!loadSlug) return;
+    if (hasUnsavedWork && !window.confirm('You have unsaved content. Loading an article will replace it. Continue?')) {
+      return;
+    }
+    setLoadingArticle(true);
+    try {
+      const { content } = await loadArticle(loadSlug);
+      const parsed = parseFrontmatter(content);
+
+      // Populate form fields from parsed front matter
+      setTitle(parsed.title);
+      setSlug(loadSlug);
+      setSlugManual(true);
+      setStatus(parsed.status || 'draft');
+      setExcerpt(parsed.excerpt);
+      setCategories(parsed.categories.join(', '));
+      setTags(parsed.tags.join(', '));
+      setFeaturedImage(parsed.featuredImage);
+      setMetaTitle(parsed.metaTitle);
+      setMetaDescription(parsed.metaDescription);
+      setMarkdown(parsed.body);
+      setHtml('');
+
+      // Convert date from "YYYY-MM-DD HH:MM:SS" to "YYYY-MM-DDTHH:MM" for datetime-local input
+      if (parsed.date) {
+        const dtMatch = parsed.date.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+        setDate(dtMatch ? `${dtMatch[1]}T${dtMatch[2]}` : '');
+      }
+
+      // Check if featured image exists on disk and set preview URL
+      if (parsed.featuredImage) {
+        const parts = parsed.featuredImage.match(/^_images\/([^/]+)\/(.+)$/);
+        if (parts) {
+          setFeaturedPreview(`/api/images/${parts[1]}/${parts[2]}`);
+        }
+      } else {
+        setFeaturedPreview('');
+      }
+
+      // Clear AI/generation state
+      setSuggestedBodyImages([]);
+      setBodyImages([]);
+      setFeaturedPrompt('');
+      setFeaturedSeoName('');
+      setFeaturedSeoManual(false);
+      setLanguageCorrections([]);
+      setDetectedLanguage('');
+      setSaveStatus(null);
+      setSaveMessage('');
+
+      // Clear the paste area (loaded content is in markdown, not pasted HTML)
+      if (pasteRef.current) {
+        pasteRef.current.innerHTML = '<em style="color:#888">Content loaded from file (edit in markdown preview)</em>';
+      }
+
+      setActiveSubTab('content');
+    } catch (err) {
+      alert('Failed to load article: ' + err.message);
+    } finally {
+      setLoadingArticle(false);
+    }
   };
 
   // Add category if not already present (case-insensitive check)
@@ -951,6 +1037,14 @@ function App() {
         ...result.image,
       };
       setBodyImages(prev => [...prev, newImage]);
+      // Auto-insert before the target heading if specified
+      if (suggestion.afterSection) {
+        const imageData = { alt: result.image.alt, mdPath: result.image.mdPath, title: result.image.title };
+        setMarkdown(prev => {
+          const updated = insertImageBeforeHeading(prev, suggestion.afterSection, imageData);
+          return updated !== null ? updated : prev;
+        });
+      }
       setSuggestedBodyImages(prev =>
         prev.map((s, i) => i === index ? { ...s, loading: false, generated: true } : s)
       );
@@ -999,6 +1093,33 @@ function App() {
         <div className="two-col-layout">
           {/* ===== LEFT COLUMN: Editor with sub-tabs ===== */}
           <div className="editor-column">
+            {/* Load existing article bar */}
+            <div className="load-article-bar">
+              <select
+                value={loadSlug}
+                onChange={(e) => setLoadSlug(e.target.value)}
+              >
+                <option value="">Load existing article...</option>
+                {existingFiles
+                  .filter((f) => f !== 'index.md')
+                  .map((f) => {
+                    const s = f.replace(/\.md$/, '');
+                    return (
+                      <option key={s} value={s}>
+                        {f}
+                      </option>
+                    );
+                  })}
+              </select>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleLoadArticle}
+                disabled={!loadSlug || loadingArticle}
+              >
+                {loadingArticle ? 'Loading...' : 'Load'}
+              </button>
+            </div>
+
             <div className="sub-tab-nav">
               <button
                 className={activeSubTab === 'content' ? 'active' : ''}
@@ -1283,9 +1404,12 @@ function App() {
 
                   {featuredPreview && (
                     <div className="featured-preview-compact" ref={featuredPreviewRef}>
-                      <a href={featuredPreview} target="_blank" rel="noopener noreferrer">
-                        <img src={featuredPreview} alt="Featured image preview" />
-                      </a>
+                      <img
+                        src={featuredPreview}
+                        alt="Featured image preview"
+                        onClick={() => setLightboxUrl(featuredPreview)}
+                        style={{ cursor: 'zoom-in' }}
+                      />
                       <div className="featured-info">
                         <div className="featured-preview-label">Blog header / hero image</div>
                         {featuredImage && (

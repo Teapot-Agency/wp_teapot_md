@@ -3,6 +3,21 @@
  */
 
 /**
+ * Load an existing blog article by slug.
+ *
+ * @param {string} slug - The post slug (without .md extension).
+ * @returns {Promise<{slug: string, content: string}>}
+ */
+export async function loadArticle(slug) {
+  const res = await fetch(`/api/blog-files/${encodeURIComponent(slug)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load article');
+  }
+  return res.json();
+}
+
+/**
  * Analyze an article with AI to get meta fields, slug, and image prompts.
  *
  * @param {string} title  - The post title.
