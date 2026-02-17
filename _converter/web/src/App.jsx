@@ -14,6 +14,7 @@ const DEFAULT_CATEGORIES = [
   { slug: 'hcp', label: 'HCP' },
   { slug: 'ai', label: 'AI' },
   { slug: 'otc', label: 'OTC' },
+  { slug: 'supplements', label: 'Supplements' },
   { slug: 'employer-branding', label: 'Employer Branding' },
 ];
 
@@ -486,16 +487,17 @@ function App() {
   const [bodyImageSeoManual, setBodyImageSeoManual] = useState(false);
   const [bodyImageLoading, setBodyImageLoading] = useState(false);
   const [draggedImage, setDraggedImage] = useState(null);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const pasteRef = useRef(null);
   const featuredPreviewRef = useRef(null);
 
   // Merge default categories with fetched ones
   const allCategories = useMemo(() => {
-    const defaultSlugs = DEFAULT_CATEGORIES.map((c) => c.slug);
+    const defaultLabels = DEFAULT_CATEGORIES.map((c) => c.label.toLowerCase());
     const extras = existingCategories
-      .filter((s) => !defaultSlugs.includes(s))
-      .map((s) => ({ slug: s, label: s }));
+      .filter((s) => !defaultLabels.includes(s.toLowerCase()))
+      .map((s) => ({ slug: s.toLowerCase(), label: s }));
     return [...DEFAULT_CATEGORIES, ...extras].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
@@ -785,6 +787,7 @@ function App() {
     setDetectedLanguage('');
     setLangCheckOpen(false);
     setActiveSubTab('content');
+    setLightboxUrl(null);
     if (pasteRef.current) {
       pasteRef.current.innerHTML = '';
     }
@@ -803,13 +806,13 @@ function App() {
     setMarkdown('');
   };
 
-  // Add category if not already present
+  // Add category if not already present (case-insensitive check)
   const addCategory = (cat) => {
     const current = categories
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    if (!current.includes(cat)) {
+    if (!current.some(c => c.toLowerCase() === cat.toLowerCase())) {
       const updated = [...current, cat].join(', ');
       setCategories(updated);
     }
@@ -856,8 +859,6 @@ function App() {
         setLanguageCorrections([]);
       }
       setDetectedLanguage(result.detectedLanguage || '');
-      // Switch to SEO & Media tab to show results
-      setActiveSubTab('seo');
     } catch (err) {
       alert('Article analysis failed: ' + err.message);
     } finally {
@@ -988,6 +989,12 @@ function App() {
 
       {activeTab === 'translate' && <TranslateView />}
 
+      {lightboxUrl && (
+        <div className="image-lightbox" onClick={() => setLightboxUrl(null)}>
+          <img src={lightboxUrl} alt="Enlarged preview" />
+        </div>
+      )}
+
       {activeTab === 'converter' && (
         <div className="two-col-layout">
           {/* ===== LEFT COLUMN: Editor with sub-tabs ===== */}
@@ -1012,8 +1019,7 @@ function App() {
 
             <div className="editor-panel">
               {/* ---- Content sub-tab ---- */}
-              {activeSubTab === 'content' && (
-                <div className="sub-tab-content">
+              <div className="sub-tab-content" style={{ display: activeSubTab === 'content' ? 'block' : 'none' }}>
                   <h2>Paste Rich Text</h2>
                   <div
                     className="paste-area"
@@ -1105,11 +1111,9 @@ function App() {
                     placeholder="Short description..."
                   />
                 </div>
-              )}
 
               {/* ---- SEO & Media sub-tab ---- */}
-              {activeSubTab === 'seo' && (
-                <div className="sub-tab-content">
+              <div className="sub-tab-content" style={{ display: activeSubTab === 'seo' ? 'block' : 'none' }}>
                   {/* Language Quality Check */}
                   {(languageCorrections.length > 0 || detectedLanguage) && (
                     <details className="collapsible" open={langCheckOpen} onToggle={(e) => setLangCheckOpen(e.currentTarget.open)}>
@@ -1193,7 +1197,7 @@ function App() {
                       {allCategories.length > 0 && (
                         <div className="suggestions">
                           {allCategories.map((c) => (
-                            <button key={c.slug} className="chip" onClick={() => addCategory(c.slug)}>
+                            <button key={c.slug} className="chip" onClick={() => addCategory(c.label)}>
                               {c.label}
                             </button>
                           ))}
@@ -1317,7 +1321,7 @@ function App() {
                                     prev.map((s, i) => i === idx ? { ...s, prompt: val } : s)
                                   );
                                 }}
-                                rows={2}
+                                rows={5}
                               />
                               <label className="suggested-label">SEO Filename</label>
                               <input
@@ -1434,14 +1438,18 @@ function App() {
                           >
                             &times;
                           </button>
-                          <img src={img.previewUrl} alt={img.alt || img.seoFilename} />
+                          <img
+                            src={img.previewUrl}
+                            alt={img.alt || img.seoFilename}
+                            onClick={(e) => { e.stopPropagation(); setLightboxUrl(img.previewUrl); }}
+                            style={{ cursor: 'zoom-in' }}
+                          />
                           <div className="image-card-name">{img.filename || img.seoFilename}</div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
             </div>
           </div>
 

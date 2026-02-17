@@ -54,6 +54,7 @@ app.use(express.json({ limit: '2mb' }));
 
 const MODEL_IMAGE = 'gemini-3-pro-image-preview';
 const MODEL_TEXT = 'gemini-2.5-flash-lite';
+const MODEL_THINKING = 'gemini-2.5-flash'; // thinking model for language quality analysis
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const MAX_IMAGE_WIDTH = 1600;
@@ -320,7 +321,12 @@ app.post('/api/analyze-article', async (req, res) => {
 
     const contentTrimmed = content.slice(0, 2500);
 
-    const response = await ai.models.generateContent({
+    // Extract all headings (keep # marks for hierarchy context)
+    const headings = content.match(/^#{1,6} .+$/gm) || [];
+    const headingsBlock = headings.join('\n');
+
+    // --- Call 1: SEO + Images (cheap flash-lite model) ---
+    const seoPromise = ai.models.generateContent({
       model: MODEL_TEXT,
       contents: `You are an SEO and content specialist for a healthcare/pharmaceutical marketing blog.
 Analyze the following article and generate:
@@ -344,8 +350,7 @@ Focus on: real people, real objects, real environments, natural lighting, realis
 Respond in the same language as the article for metaTitle, metaDescription, and slug.
 
 Article title: ${title}
-
-Article content:
+Article content (first 2500 chars):
 ${contentTrimmed}
 
 Return ONLY valid JSON with no markdown formatting:
@@ -353,15 +358,87 @@ Return ONLY valid JSON with no markdown formatting:
       config: { temperature: 0.7 },
     });
 
-    let text = response.text.trim();
-    // Strip markdown code fences if present
-    text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    const parsed = JSON.parse(text);
+    // --- Call 2: Language Quality Check (thinking model for deep analysis) ---
+    const langPromise = ai.models.generateContent({
+      model: MODEL_THINKING,
+      contents: `You are a professional proofreader and native-level language expert.
+Analyze the following blog article. Check the title and ALL headings for language quality issues.
 
-    // Validate required fields
+Read the full article to understand context, then evaluate each title/heading for naturalness.
+Flag any phrase that:
+- Is awkward, unnatural, or sounds like a bad machine translation
+- Uses words in unusual collocations that don't make sense together
+- Has grammatical errors (wrong case, wrong preposition, wrong word order)
+- Is overly literal translation from another language
+- Uses metaphors or expressions that don't work in the detected language
+
+Think carefully about each phrase. Consider whether a native speaker would actually write this in a professional blog post.
+
+Title: ${title}
+
+Headings (with markdown hierarchy):
+${headingsBlock}
+
+Full article content:
+${content}
+
+Return ONLY valid JSON with no markdown formatting:
+{"detectedLanguage": "sk|cs|en|...", "languageCorrections": [{"original": "exact text as it appears", "suggested": "corrected natural version", "reason": "brief explanation in English", "type": "heading|title"}]}
+
+If everything sounds natural, return an empty languageCorrections array.`,
+      config: {
+        temperature: 0.2,
+        thinkingConfig: { includeThoughts: true },
+      },
+    });
+
+    // Run both calls in parallel
+    const [seoResponse, langResponse] = await Promise.all([
+      seoPromise,
+      langPromise.catch((err) => {
+        console.error('[analyze] Language check failed:', err.message);
+        return null; // Don't fail the whole analysis if language check errors
+      }),
+    ]);
+
+    // Parse SEO result (critical path)
+    let seoText = seoResponse.text.trim();
+    seoText = seoText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    const parsed = JSON.parse(seoText);
+
     if (!parsed.metaTitle || !parsed.metaDescription || !parsed.slug || !parsed.featuredImage || !parsed.bodyImages) {
       throw new Error('Incomplete response from AI model');
     }
+
+    // Parse language check result (optional — graceful fallback)
+    let detectedLanguage = '';
+    let languageCorrections = [];
+    if (langResponse) {
+      try {
+        // Log thinking parts from the reasoning model
+        const parts = langResponse.candidates?.[0]?.content?.parts || [];
+        console.log('[analyze] Response parts:', parts.length);
+        for (const part of parts) {
+          if (part.thought) {
+            console.log('[analyze] 🧠 Thinking:\n' + part.text);
+          }
+        }
+
+        let langText = langResponse.text.trim();
+        console.log('[analyze] 📝 Language check output:\n' + langText);
+        langText = langText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+        const langParsed = JSON.parse(langText);
+        detectedLanguage = langParsed.detectedLanguage || '';
+        languageCorrections = Array.isArray(langParsed.languageCorrections) ? langParsed.languageCorrections : [];
+      } catch (langErr) {
+        console.error('[analyze] Failed to parse language check response:', langErr.message);
+      }
+    }
+
+    parsed.detectedLanguage = detectedLanguage;
+    parsed.languageCorrections = languageCorrections;
+
+    console.log('[analyze] lang:', detectedLanguage, 'corrections:', languageCorrections.length);
 
     res.json(parsed);
   } catch (err) {

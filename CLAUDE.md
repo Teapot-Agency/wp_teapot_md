@@ -303,13 +303,14 @@ Image generation is fully integrated into the web converter app. No separate CLI
   - `GEMINI_API_KEY` — for AI analysis and image generation
   - `DEEPL_API_KEY` — for article translation (optional)
 - **Models**:
-  - Text analysis: `gemini-2.5-flash-lite` (cheap, $0.10/$0.40 per 1M tokens)
+  - Text analysis (SEO/images): `gemini-2.5-flash-lite` (cheap, $0.10/$0.40 per 1M tokens)
+  - Language quality check: `gemini-2.5-flash` (thinking model — reasons step-by-step about Slovak/Czech phrasing)
   - Image generation: `gemini-3-pro-image-preview` (Nano Banana Pro — uses internal "Thinking" for high-fidelity output)
 
 ### Workflow
 
 1. Paste article content into the web app
-2. Click **"Analyze Article"** — AI returns: SEO meta title/description, slug, 1 featured image prompt, 2 body image prompts with target sections
+2. Click **"Analyze Article"** — two parallel AI calls: flash-lite returns SEO meta/slug/image prompts, flash (thinking) returns language quality corrections
 3. Review and edit any AI-suggested values
 4. Click **"Generate"** on each image prompt — Gemini 3 Pro creates the image
 5. Featured image is auto-set in front matter; body images are dragged into drop zones in the preview
